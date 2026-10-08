@@ -41,9 +41,10 @@ const nombreCompleto = (u) => [u.nombre, u.apellidos].filter(Boolean).join(" ");
 /**
  * mode: "nueva" | "editar"
  * initialData: registro existente (viene de vw_peticiones) cuando mode === "editar"
+ * solicitudMp: solicitud del Ministerio Público que se está atendiendo (opcional)
  * onSaved: callback cuando se guarda con éxito
  */
-export default function PeticionWizard({ mode = "nueva", initialData = null, onSaved }) {
+export default function PeticionWizard({ mode = "nueva", initialData = null, solicitudMp = null, onSaved }) {
   const esEdicion = mode === "editar";
   const { user } = useAuth();
   // En edición, solo el Administrador puede modificar
@@ -60,6 +61,12 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, onS
 
   const [form, setForm] = useState({
     ...emptyForm,
+    ...(solicitudMp
+      ? {
+          numero_carpeta: solicitudMp.numero_carpeta ?? "",
+          descripcion_solicitud: solicitudMp.breve_resena ?? "",
+        }
+      : {}),
     ...(initialData
       ? {
           llamado_id: initialData.llamado_id ?? "",

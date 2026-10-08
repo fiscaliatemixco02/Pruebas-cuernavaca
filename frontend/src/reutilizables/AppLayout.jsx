@@ -85,9 +85,11 @@ const ICONS = {
 const NAV_ITEMS = [
   { to: "/", label: "Inicio", icon: "inicio", end: true, vista: "inicio" },
   { to: "/peticiones/nueva", label: "Nuevo Registro", icon: "nuevo", vista: "nuevoRegistro" },
+  { to: "/solicitud-mp", label: "Solicitud MP", icon: "nuevo", vista: "solicitudMP" },
   { to: "/usuarios", label: "Personal", icon: "personal", vista: "usuarios" },
   { to: "/peticiones/buscar", label: "Expedientes", icon: "expedientes", expandable: true, vista: "expedientes" },
   { to: "/por-firmar", label: "Por Firmar", icon: "expedientes", vista: "porFirmar" },
+  { to: "/solicitudes-recibidas", label: "Solicitudes MP", icon: "expedientes", vista: "solicitudesRecibidas" },
   { to: "/peticiones/editar", label: "Editar petición", icon: "editar", vista: "editarPeticion" },
   { to: "/bitacora", label: "Bitácora", icon: "personal", vista: "bitacora" },
   { to: "/estadisticas", label: "Estadísticas", icon: "estadisticas", vista: "estadisticas" },

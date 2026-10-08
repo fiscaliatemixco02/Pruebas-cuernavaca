@@ -6,7 +6,7 @@ import { peticionesApi } from "../api/peticiones";
 import { SelectField, TextField } from "../reutilizables/Field";
 import "./Auth.css";
 
-const ROLES = ["Administrador", "Receptor", "Perito", "Consulta"];
+const ROLES = ["Administrador", "Receptor", "Perito", "Consulta", "Ministerio Publico"];
 
 export default function CrearCuenta() {
   const navigate = useNavigate();

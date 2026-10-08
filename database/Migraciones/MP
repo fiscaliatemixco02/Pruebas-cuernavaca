@@ -1,0 +1,30 @@
+-- Nuevo rol (ajusta a como guardes los roles)
+INSERT INTO roles (nom_rol) VALUES ('Ministerio Publico');
+
+CREATE TABLE solicitudes_mp (
+  id               SERIAL PRIMARY KEY,
+  mp_id            INT NOT NULL REFERENCES usuarios(id),
+  numero_carpeta   TEXT NOT NULL,
+  materia_id       INT NOT NULL REFERENCES materias(id),
+  breve_resena     TEXT NOT NULL,
+  archivo_pdf      TEXT NOT NULL,              -- ruta del archivo
+  estado           TEXT NOT NULL DEFAULT 'PENDIENTE',  -- PENDIENTE | ATENDIDA
+  peticion_id      INT REFERENCES peticiones(id),      -- se llena cuando el receptor la atiende
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Para ver el número de llamado sin otra consulta
+CREATE VIEW vw_solicitudes_mp AS
+SELECT s.*, m.nombre AS materia, p.numero_llamado,
+       u.nombre AS nombre_mp
+FROM solicitudes_mp s
+JOIN materias m ON m.id = s.materia_id
+JOIN usuarios u ON u.id = s.mp_id
+LEFT JOIN peticiones p ON p.id = s.peticion_id;
+
+INSERT INTO materias (nombre) VALUES
+	('Criminalistica'),
+	('Informatica'),
+	('Psicologia'),
+	('Medicina legal'),
+	('Acústica');

@@ -10,7 +10,7 @@ const { verificarToken, requerirRol } = require('../middleware/auth');
 const router = express.Router();
 router.use(verificarToken);
 
-const TODOS = ['Administrador', 'Receptor', 'Perito', 'Consulta'];
+const TODOS = ['Administrador', 'Receptor', 'Perito', 'Consulta','Ministerio publico'];
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
   'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
