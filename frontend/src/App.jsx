@@ -17,8 +17,8 @@ import Carpetas from "./paginas/Carpetas";
 import { VISTAS } from "./paginas/permisos";
 import PorFirmar from "./paginas/PorFirmar";
 import Respaldo from "./paginas/Respaldo";
-
-
+import SolicitudMP from "./paginas/SolicitudMP";
+import SolicitudesRecibidas from "./paginas/SolicitudesRecibidas";
 
 export default function App() {
   return (
@@ -26,50 +26,34 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
-        {/* Inicio: cualquier rol con sesión */}
         <Route
           path="/"
           element={<ProtectedRoute roles={VISTAS.inicio}><Home /></ProtectedRoute>}
         />
-
-        {/* Nuevo registro: Administrador, Receptor */}
         <Route
           path="/peticiones/nueva"
           element={<ProtectedRoute roles={VISTAS.nuevoRegistro}><NuevaPeticion /></ProtectedRoute>}
         />
-
-        {/* Expedientes: Administrador, Receptor */}
         <Route
           path="/peticiones/buscar"
           element={<ProtectedRoute roles={VISTAS.expedientes}><BuscarPeticion /></ProtectedRoute>}
         />
-
-        {/* Buscar para editar: solo Administrador */}
         <Route
           path="/peticiones/editar"
           element={<ProtectedRoute roles={VISTAS.editarPeticion}><EditarPeticion /></ProtectedRoute>}
         />
-
-        {/* Ficha de una petición: todos los roles (solo lectura salvo Administrador;
-            el Perito además sube su PDF, y el backend limita a sus asignadas) */}
         <Route
           path="/peticiones/editar/:id"
           element={<ProtectedRoute roles={VISTAS.verPeticion}><EditarPeticion /></ProtectedRoute>}
         />
-
-        {/* Carpetas: Administrador, Receptor */}
         <Route
           path="/carpetas"
           element={<ProtectedRoute roles={VISTAS.carpetas}><Carpetas /></ProtectedRoute>}
         />
-
-        {/* Estadísticas: Administrador, Consulta */}
         <Route
           path="/estadisticas"
           element={<ProtectedRoute roles={VISTAS.estadisticas}><Estadisticas /></ProtectedRoute>}
         />
-
-        {/* Notificaciones: Administrador, Perito */}
         <Route
           path="/notificaciones"
           element={<ProtectedRoute roles={VISTAS.notificaciones}><Notificaciones /></ProtectedRoute>}
@@ -78,8 +62,6 @@ export default function App() {
           path="/peticiones/perito/:id"
           element={<ProtectedRoute roles={VISTAS.notificaciones}><PeticionPerito /></ProtectedRoute>}
         />
-
-        {/* Solo Administrador */}
         <Route
           path="/usuarios"
           element={<ProtectedRoute roles={VISTAS.usuarios}><Usuarios /></ProtectedRoute>}
@@ -92,23 +74,23 @@ export default function App() {
           path="/bitacora"
           element={<ProtectedRoute roles={VISTAS.bitacora}><Bitacora /></ProtectedRoute>}
         />
-
-        <Route 
-          path="/por-firmar" 
-          element={
-            <ProtectedRoute roles={VISTAS.porFirmar}>
-              <PorFirmar />
-            </ProtectedRoute>
-          } 
+        <Route
+          path="/por-firmar"
+          element={<ProtectedRoute roles={VISTAS.porFirmar}><PorFirmar /></ProtectedRoute>}
         />
-
         <Route
           path="/respaldo"
-          element={
-            <ProtectedRoute roles={VISTAS.respaldo}>
-              <Respaldo />
-            </ProtectedRoute>
-          }
+          element={<ProtectedRoute roles={VISTAS.respaldo}><Respaldo /></ProtectedRoute>}
+        />
+
+        {/* Ministerio Público */}
+        <Route
+          path="/solicitud-mp"
+          element={<ProtectedRoute roles={VISTAS.solicitudMP}><SolicitudMP /></ProtectedRoute>}
+        />
+        <Route
+          path="/solicitudes-recibidas"
+          element={<ProtectedRoute roles={VISTAS.solicitudesRecibidas}><SolicitudesRecibidas /></ProtectedRoute>}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />

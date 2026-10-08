@@ -26,8 +26,10 @@ const { ADMIN, PERITO, RECEPTOR, CONSULTA } = ROLES;
 
   El Administrador está en todas.
 */
+export const MP = "Ministerio Publico";
+
 export const VISTAS = {
-  inicio:         [ADMIN, PERITO, RECEPTOR, CONSULTA],
+  inicio:         [ADMIN, PERITO, RECEPTOR, CONSULTA, MP],
   notificaciones: [PERITO],
   nuevoRegistro:  [ADMIN, RECEPTOR],
   expedientes:    [ADMIN, RECEPTOR],
@@ -38,10 +40,11 @@ export const VISTAS = {
   usuarios:       [ADMIN],
   crearCuenta:    [ADMIN],
   bitacora:       [ADMIN],
-  porFirmar: [ADMIN, RECEPTOR],
-  respaldo: [ADMIN],
+  porFirmar:      [ADMIN, RECEPTOR],
+  respaldo:       [ADMIN],
+  solicitudMP:          [MP],
+  solicitudesRecibidas: [ADMIN, RECEPTOR],
 };
-
 export function puedeVer(rol, vista) {
   if (!vista || !VISTAS[vista]) return true;
   return VISTAS[vista].includes(rol);

@@ -6,17 +6,18 @@ const estadisticasRoutes = require('./routes/estadisticas');
 const cors = require('cors');
 const carpetasRoutes = require('./routes/carpetas');
 const peticionesRoutes = require('./routes/peticiones');
+const solicitudesMpRoutes = require('./routes/solicitudesMP');
 const { verificarToken, requerirRol } = require('./middleware/auth');
 const respaldoRoutes = require('./routes/respaldo');
 const app = express();
 const PORT = process.env.PORT || 3000;
-
 // Nombres de rol: deben coincidir EXACTO con roles.nom_rol en la BD
 const ADMIN = 'Administrador';
 const RECEPTOR = 'Receptor';
 const PERITO = 'Perito';
 const CONSULTA = 'Consulta';
-const TODOS = [ADMIN, RECEPTOR, PERITO, CONSULTA];
+const MP = 'Ministerio Publico';
+const TODOS = [ADMIN, RECEPTOR, PERITO, CONSULTA, MP];
 
 app.use(express.json());
 
@@ -38,6 +39,9 @@ app.use('/api/estadisticas', verificarToken, requerirRol(ADMIN, CONSULTA), estad
 // (incluye /api/peticiones/asignadas, que vive en routes/peticiones.js)
 app.use('/api/carpetas', verificarToken, carpetasRoutes);
 app.use('/api/peticiones', verificarToken, peticionesRoutes);
+
+// Solicitudes del Ministerio Público (roles definidos dentro de routes/solicitudesMp.js)
+app.use('/api/solicitudes-mp', verificarToken, solicitudesMpRoutes);
 
 app.use('/api/notificaciones', require('./routes/notificaciones'));
 
@@ -102,7 +106,6 @@ app.get('/api/materias', verificarToken, requerirRol(...TODOS), async (req, res)
   }
 });
 
-// Usuarios con rol de Perito
 // Usuarios con rol de Perito. Con ?materia_id=X devuelve solo los de esa materia.
 app.get('/api/peritos', verificarToken, requerirRol(ADMIN, RECEPTOR), async (req, res) => {
   const { materia_id } = req.query;
