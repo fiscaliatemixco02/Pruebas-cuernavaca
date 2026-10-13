@@ -4,6 +4,7 @@ import AppLayout from "../reutilizables/AppLayout";
 import { peticionesApi } from "../api/peticiones";
 import { api } from "../api/client";
 import { SelectField } from "../reutilizables/Field";
+import ListaPdfsPendientes from "../reutilizables/ListaPdfsPendientes";
 
 const TIPOS = [
   { value: "dictamen", label: "Dictamen" },
@@ -253,22 +254,11 @@ export default function PeticionPerito() {
                 </span>
               </div>
 
-              {archivos.length > 0 && (
-                <ul style={{ margin: "12px 0 0", paddingLeft: 18 }}>
-                  {archivos.map((f, i) => (
-                    <li key={i} style={{ marginBottom: 4 }}>
-                      {f.name}{" "}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => setArchivos((p) => p.filter((_, j) => j !== i))}
-                      >
-                        Quitar
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ListaPdfsPendientes
+                archivos={archivos}
+                onQuitar={(i) => setArchivos((p) => p.filter((_, j) => j !== i))}
+                style={{ marginTop: 12 }}
+              />
 
               <div className="btn-row end" style={{ marginTop: 20 }}>
                 <button className="btn btn-primary" type="submit" disabled={subiendo}>
