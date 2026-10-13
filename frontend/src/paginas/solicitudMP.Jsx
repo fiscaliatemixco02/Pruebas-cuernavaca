@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "../reutilizables/AppLayout";
 import { solicitudesMpApi } from "../api/solicitudesMp";
 import { SelectField, TextArea, TextField } from "../reutilizables/Field";
+import ListaPdfsPendientes from "../reutilizables/ListaPdfsPendientes";
 
 const vacio = { numero_carpeta: "", materia_id: "", breve_resena: "" };
 
@@ -14,7 +15,29 @@ export default function SolicitudMP() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const cargar = () => solicitudesMpApi.listar().then(setLista).catch(() => setLista([]));
+  const [pdfsPorSolicitud, setPdfsPorSolicitud] = useState({}); // { [solicitudId]: [{ id, nombre_original }] }
+
+  const cargar = async () => {
+    try {
+      const filas = await solicitudesMpApi.listar();
+      setLista(filas);
+      // Trae la lista de PDF de cada solicitud para poder mostrar un botón "Ver" por archivo
+      const entradas = await Promise.all(
+        filas.map((f) =>
+          solicitudesMpApi
+            .pdfs(f.id)
+            .then((l) => [f.id, Array.isArray(l) ? l : []])
+            .catch(() => [f.id, []])
+        )
+      );
+      setPdfsPorSolicitud(Object.fromEntries(entradas));
+    } catch {
+      setLista([]);
+    }
+  };
+
+  const verPdf = (solicitudId, archivoId) =>
+    solicitudesMpApi.abrirPdf(solicitudId, archivoId).catch((e) => setError(e.message));
 
   useEffect(() => {
     solicitudesMpApi.materias().then(setMaterias).catch((e) => setError(e.message));
@@ -91,22 +114,10 @@ export default function SolicitudMP() {
                   setPdfs((prev) => [...prev, ...nuevos]);
                 }}
               />
-              {pdfs.length > 0 && (
-                <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-                  {pdfs.map((f, i) => (
-                    <li key={i}>
-                      {f.name}{" "}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => setPdfs((p) => p.filter((_, j) => j !== i))}
-                      >
-                        Quitar
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ListaPdfsPendientes
+                archivos={pdfs}
+                onQuitar={(i) => setPdfs((p) => p.filter((_, j) => j !== i))}
+              />
             </div>
           </div>
           <TextArea
@@ -133,6 +144,7 @@ export default function SolicitudMP() {
               <th>Área</th>
               <th>Estado</th>
               <th>Número de llamado</th>
+              <th>Oficio (PDF)</th>
             </tr>
           </thead>
           <tbody>
@@ -143,10 +155,33 @@ export default function SolicitudMP() {
                 <td>{s.materia}</td>
                 <td>{s.estado === "ATENDIDA" ? "Atendida" : "En espera"}</td>
                 <td>{s.numero_llamado ?? "Pendiente de asignar"}</td>
+                <td>
+                  {(pdfsPorSolicitud[s.id] || []).length > 0 ? (
+                    <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
+                      {pdfsPorSolicitud[s.id].map((p) => (
+                        <li key={p.id} style={{ marginBottom: 4 }}>
+                          {p.nombre_original}{" "}
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => verPdf(s.id, p.id)}
+                          >
+                            Ver
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    // Solicitudes anteriores sin lista de archivos: abre el primer PDF
+                    <button type="button" className="btn btn-secondary" onClick={() => verPdf(s.id)}>
+                      Ver
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {lista.length === 0 && (
-              <tr><td colSpan={5}>Aún no has enviado solicitudes.</td></tr>
+              <tr><td colSpan={6}>Aún no has enviado solicitudes.</td></tr>
             )}
           </tbody>
         </table>

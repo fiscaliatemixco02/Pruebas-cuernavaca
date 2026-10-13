@@ -5,6 +5,7 @@ import { peticionesApi } from "../api/peticiones";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PeticionWizard from "./PeticionWizard";
+import ListaPdfsPendientes from "../reutilizables/ListaPdfsPendientes";
 
 const fmtFecha = (f) => (f ? String(f).slice(0, 10) : "");
 const fmtHora = (h) => (h ? String(h).slice(0, 8) : "");
@@ -299,22 +300,11 @@ export default function EditarPeticion() {
                     {subiendo ? "Subiendo..." : "Subir PDF"}
                   </button>
                 </div>
-                {archivos.length > 0 && (
-                  <ul style={{ margin: "8px 0", paddingLeft: 18 }}>
-                    {archivos.map((f, i) => (
-                      <li key={i} style={{ marginBottom: 4 }}>
-                        {f.name}{" "}
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => setArchivos((p) => p.filter((_, j) => j !== i))}
-                        >
-                          Quitar
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <ListaPdfsPendientes
+                  archivos={archivos}
+                  onQuitar={(i) => setArchivos((p) => p.filter((_, j) => j !== i))}
+                  style={{ margin: "8px 0" }}
+                />
                 <span className="field-hint">
                   Los nuevos PDF se agregan a los que ya existen.
                 </span>

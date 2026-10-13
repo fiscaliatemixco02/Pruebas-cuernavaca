@@ -3,17 +3,62 @@ import AppLayout from "../reutilizables/AppLayout";
 import { solicitudesMpApi } from "../api/solicitudesMp";
 import PeticionWizard from "./PeticionWizard";
 
+/* Botones "Ver" de los PDF de una solicitud (uno por archivo).
+   Si la solicitud es antigua y no tiene lista de archivos, abre el primero. */
+function BotonesPdf({ solicitudId, pdfs, onVer }) {
+  if (!pdfs || pdfs.length === 0) {
+    return (
+      <button type="button" className="btn btn-secondary" onClick={() => onVer(solicitudId)}>
+        Ver PDF
+      </button>
+    );
+  }
+  return (
+    <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
+      {pdfs.map((p) => (
+        <li key={p.id} style={{ marginBottom: 4 }}>
+          {p.nombre_original}{" "}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => onVer(solicitudId, p.id)}
+          >
+            Ver
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function SolicitudesRecibidas() {
   const [lista, setLista] = useState([]);
+  const [pdfsPorSolicitud, setPdfsPorSolicitud] = useState({}); // { [id]: [{ id, nombre_original }] }
   const [activa, setActiva] = useState(null);
   const [error, setError] = useState("");
 
-  const cargar = () =>
-    solicitudesMpApi.listar().then(setLista).catch((e) => setError(e.message));
+  const cargar = async () => {
+    try {
+      const filas = await solicitudesMpApi.listar();
+      setLista(filas);
+      const entradas = await Promise.all(
+        filas.map((f) =>
+          solicitudesMpApi
+            .pdfs(f.id)
+            .then((l) => [f.id, Array.isArray(l) ? l : []])
+            .catch(() => [f.id, []])
+        )
+      );
+      setPdfsPorSolicitud(Object.fromEntries(entradas));
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   useEffect(() => { cargar(); }, []);
 
-  const verPdf = (id) => solicitudesMpApi.abrirPdf(id).catch((e) => setError(e.message));
+  const verPdf = (solicitudId, archivoId) =>
+    solicitudesMpApi.abrirPdf(solicitudId, archivoId).catch((e) => setError(e.message));
 
   async function alGuardar(creada) {
     try {
@@ -35,7 +80,12 @@ export default function SolicitudesRecibidas() {
           <p><b>MP:</b> {activa.nombre_mp}</p>
           <p><b>Área solicitada:</b> {activa.materia}</p>
           <p><b>Reseña:</b> {activa.breve_resena}</p>
-          <button className="btn" type="button" onClick={() => verPdf(activa.id)}>Ver PDF</button>
+          <p><b>Oficio (PDF):</b></p>
+          <BotonesPdf
+            solicitudId={activa.id}
+            pdfs={pdfsPorSolicitud[activa.id]}
+            onVer={verPdf}
+          />
         </div>
         <PeticionWizard mode="nueva" solicitudMp={activa} onSaved={alGuardar} />
       </AppLayout>
@@ -49,7 +99,8 @@ export default function SolicitudesRecibidas() {
         <table className="table">
           <thead>
             <tr>
-              <th>Fecha</th><th>MP</th><th>Carpeta</th><th>Área</th><th>Estado</th><th></th>
+              <th>Fecha</th><th>MP</th><th>Carpeta</th><th>Área</th><th>Estado</th>
+              <th>Oficio (PDF)</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -61,15 +112,16 @@ export default function SolicitudesRecibidas() {
                 <td>{s.materia}</td>
                 <td>{s.estado === "ATENDIDA" ? `Atendida (${s.numero_llamado ?? ""})` : "Pendiente"}</td>
                 <td>
-                  {s.estado === "PENDIENTE" ? (
+                  <BotonesPdf solicitudId={s.id} pdfs={pdfsPorSolicitud[s.id]} onVer={verPdf} />
+                </td>
+                <td>
+                  {s.estado === "PENDIENTE" && (
                     <button className="btn btn-primary" onClick={() => setActiva(s)}>Atender</button>
-                  ) : (
-                    <button className="btn" onClick={() => verPdf(s.id)}>PDF</button>
                   )}
                 </td>
               </tr>
             ))}
-            {lista.length === 0 && <tr><td colSpan={6}>No hay solicitudes.</td></tr>}
+            {lista.length === 0 && <tr><td colSpan={7}>No hay solicitudes.</td></tr>}
           </tbody>
         </table>
       </div>
