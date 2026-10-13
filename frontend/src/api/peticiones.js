@@ -1,5 +1,5 @@
 import { api } from "./client";
- 
+
 export const peticionesApi = {
   crear: (payload) => api.post("/peticiones", payload),
   completar: (id, payload) => api.put(`/peticiones/${id}`, payload),
@@ -14,13 +14,30 @@ export const peticionesApi = {
 
   // Entrega (PDF) de una petición
   obtenerEntrega: (id) => api.get(`/peticiones/${id}/entrega`),
-  subirEntrega: (id, { tipo, archivo }) => {
+
+  // Sube uno o varios PDF. Acepta { tipo, archivos: [File, ...] }
+  // (también { tipo, archivo: File } para no romper código viejo).
+  subirEntrega: (id, { tipo, archivos, archivo }) => {
+    const lista = archivos ?? (archivo ? [archivo] : []);
     const fd = new FormData();
-    fd.append("archivo", archivo);
+    lista.forEach((f) => fd.append("archivos", f)); // mismo nombre para todos
     fd.append("tipo", tipo);
     return api.postForm(`/peticiones/${id}/entrega`, fd);
-  }, 
-   descargarEntrega: (id) => api.getBlob(`/peticiones/${id}/entrega/archivo`),
+  },
+
+  // Lista de PDF de la entrega: [{ id, tipo, nombre_original, subido_en }]
+  listarArchivosEntrega: (id) => api.get(`/peticiones/${id}/entrega/archivos`),
+
+  // Devuelve el blob de un PDF concreto
+  descargarArchivoEntrega: (id, archivoId) =>
+    api.getBlob(`/peticiones/${id}/entrega/archivo/${archivoId}`),
+
+  // Elimina un PDF concreto de la entrega
+  eliminarArchivoEntrega: (id, archivoId) =>
+    api.post(`/peticiones/${id}/entrega/archivo/${archivoId}/eliminar`, {}),
+
+  // Último PDF cargado (compatibilidad)
+  descargarEntrega: (id) => api.getBlob(`/peticiones/${id}/entrega/archivo`),
 
   // Firma de recepción (Administrador / Receptor), con su contraseña
   firmar: (id, contrasena) => api.post(`/peticiones/${id}/firmar`, { contrasena }),

@@ -31,8 +31,9 @@ export default function EditarPeticion() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // PDF
-  const [archivo, setArchivo] = useState(null);
+  // PDFs
+  const [archivos, setArchivos] = useState([]);
+  const [pdfsCargados, setPdfsCargados] = useState([]);
   const [tipo, setTipo] = useState("dictamen");
   const [subiendo, setSubiendo] = useState(false);
   const [msgPdf, setMsgPdf] = useState("");
@@ -42,6 +43,11 @@ export default function EditarPeticion() {
     if (idFromRoute) cargarPorId(idFromRoute);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idFromRoute]);
+
+  useEffect(() => {
+    if (peticion?.id) cargarPdfs(peticion.id);
+    else setPdfsCargados([]);
+  }, [peticion?.id]);
 
   async function cargarPorId(id) {
     setError("");
@@ -53,6 +59,16 @@ export default function EditarPeticion() {
       setError(err.message || "No se encontró la petición.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function cargarPdfs(idPeticion) {
+    try {
+      // Si tu cliente `api` no tiene .get, usa el método equivalente para JSON
+      const lista = await api.get(`/peticiones/${idPeticion}/entrega/archivos`);
+      setPdfsCargados(Array.isArray(lista) ? lista : []);
+    } catch {
+      setPdfsCargados([]);
     }
   }
 
@@ -77,36 +93,57 @@ export default function EditarPeticion() {
 
   async function subirPdf(e) {
     e.preventDefault();
+    const formEl = e.target;
     setMsgPdf("");
     setErrPdf("");
-    if (!archivo) {
-      setErrPdf("Selecciona un archivo PDF.");
+    if (archivos.length === 0) {
+      setErrPdf("Selecciona al menos un archivo PDF.");
+      return;
+    }
+    if (archivos.some((f) => f.type !== "application/pdf")) {
+      setErrPdf("Todos los archivos deben ser PDF.");
       return;
     }
     const fd = new FormData();
-    fd.append("archivo", archivo);
+    archivos.forEach((f) => fd.append("archivos", f)); // mismo nombre para todos
     fd.append("tipo", tipo);
     setSubiendo(true);
     try {
       await api.postForm(`/peticiones/${peticion.id}/entrega`, fd);
-      setMsgPdf("PDF subido correctamente.");
-      setArchivo(null);
-      e.target.reset();
+      setMsgPdf(`${archivos.length} PDF(s) subido(s) correctamente.`);
+      setArchivos([]);
+      formEl.reset();
+      await cargarPdfs(peticion.id);
     } catch (err) {
-      setErrPdf(err.message || "No se pudo subir el PDF.");
+      setErrPdf(err.message || "No se pudieron subir los PDF.");
     } finally {
       setSubiendo(false);
     }
   }
 
-  async function descargarPdf() {
+  async function abrirPdf(archivoId) {
     setMsgPdf("");
     setErrPdf("");
     try {
-      const blob = await api.getBlob(`/peticiones/${peticion.id}/entrega/archivo`);
+      const blob = await api.getBlob(
+        `/peticiones/${peticion.id}/entrega/archivo/${archivoId}`
+      );
       window.open(URL.createObjectURL(blob), "_blank");
     } catch (err) {
       setErrPdf(err.message || "No se pudo abrir el PDF.");
+    }
+  }
+
+  async function eliminarPdf(archivoId, nombre) {
+    if (!window.confirm(`¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`)) return;
+    setMsgPdf("");
+    setErrPdf("");
+    try {
+      await api.post(`/peticiones/${peticion.id}/entrega/archivo/${archivoId}/eliminar`, {});
+      setMsgPdf("PDF eliminado.");
+      await cargarPdfs(peticion.id);
+    } catch (err) {
+      setErrPdf(err.message || "No se pudo eliminar el PDF.");
     }
   }
 
@@ -140,6 +177,8 @@ export default function EditarPeticion() {
               onClick={() => {
                 setPeticion(null);
                 setNumeroLlamado("");
+                setArchivos([]);
+                setPdfsCargados([]);
                 setMsgPdf("");
                 setErrPdf("");
                 if (idFromRoute) navigate(esAdmin ? "/peticiones/editar" : -1);
@@ -199,10 +238,39 @@ export default function EditarPeticion() {
             {errPdf ? <div className="status-banner error">{errPdf}</div> : null}
             {msgPdf ? <div className="status-banner success">{msgPdf}</div> : null}
 
-            <div className="btn-row" style={{ marginBottom: 12 }}>
-              <button type="button" className="btn btn-secondary" onClick={descargarPdf}>
-                Ver PDF cargado
-              </button>
+            <div style={{ marginBottom: 12 }}>
+              {pdfsCargados.length === 0 ? (
+                <span className="field-hint">Aún no hay PDF cargados.</span>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {pdfsCargados.map((p) => (
+                    <li key={p.id} style={{ marginBottom: 6 }}>
+                      <strong style={{ textTransform: "capitalize" }}>{p.tipo}</strong>
+                      {" — "}
+                      {p.nombre_original}{" "}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => abrirPdf(p.id)}
+                      >
+                        Ver
+                      </button>
+                      {(esPerito || esAdmin) && (
+                        <>
+                          {" "}
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => eliminarPdf(p.id, p.nombre_original)}
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {(esPerito || esAdmin) && (
@@ -220,13 +288,36 @@ export default function EditarPeticion() {
                   <input
                     type="file"
                     accept="application/pdf"
-                    onChange={(e) => setArchivo(e.target.files[0] || null)}
+                    multiple
+                    onChange={(e) => {
+                      const nuevos = Array.from(e.target.files || []); // copiar ANTES de limpiar
+                      e.target.value = ""; // permite volver a elegir el mismo archivo
+                      setArchivos((prev) => [...prev, ...nuevos]);
+                    }}
                   />
                   <button className="btn btn-primary" type="submit" disabled={subiendo}>
                     {subiendo ? "Subiendo..." : "Subir PDF"}
                   </button>
                 </div>
-                <span className="field-hint">Si ya había un PDF, el nuevo lo reemplaza.</span>
+                {archivos.length > 0 && (
+                  <ul style={{ margin: "8px 0", paddingLeft: 18 }}>
+                    {archivos.map((f, i) => (
+                      <li key={i} style={{ marginBottom: 4 }}>
+                        {f.name}{" "}
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => setArchivos((p) => p.filter((_, j) => j !== i))}
+                        >
+                          Quitar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="field-hint">
+                  Los nuevos PDF se agregan a los que ya existen.
+                </span>
               </form>
             )}
           </div>

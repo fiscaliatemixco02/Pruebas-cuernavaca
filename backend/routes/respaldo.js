@@ -14,11 +14,14 @@ router.use(verificarToken);
 
 // Misma carpeta donde routes/peticiones.js guarda los PDF de entrega
 const DIR_ENTREGAS = path.join(__dirname, '..', 'uploads', 'entregas');
+// Misma carpeta donde routes/solicitudesMp.js guarda los oficios de solicitud
+const DIR_SOLICITUDES = path.join(__dirname, '..', 'uploads', 'solicitudes');
 
-// ---------- RESPALDO COMPLETO (.zip): datos de todas las tablas + PDF de entregas ----------
+// ---------- RESPALDO COMPLETO (.zip): datos de todas las tablas + PDF ----------
 router.get('/', requerirRol('Administrador'), async (req, res) => {
   try {
     // Todas las tablas del esquema public (las vistas no se respaldan: se arman con las tablas)
+    // Incluye entrega_archivos y solicitud_mp_archivos automáticamente.
     const t = await pool.query(
       `SELECT table_name
          FROM information_schema.tables
@@ -47,6 +50,7 @@ router.get('/', requerirRol('Administrador'), async (req, res) => {
     zip.pipe(res);
 
     const hayEntregas = fs.existsSync(DIR_ENTREGAS);
+    const haySolicitudes = fs.existsSync(DIR_SOLICITUDES);
 
     const leeme = [
       'RESPALDO DEL SISTEMA',
@@ -56,15 +60,18 @@ router.get('/', requerirRol('Administrador'), async (req, res) => {
       'Contenido:',
       '  base_de_datos/  Un archivo .json por cada tabla, con todos sus registros.',
       '  entregas/       PDF cargados por los peritos (carpeta uploads/entregas).',
+      '  solicitudes/    Oficios PDF de las solicitudes del Ministerio Público (carpeta uploads/solicitudes).',
       '',
       'Tablas respaldadas:',
       ...tablas.map((x) => `  ${x.nombre}: ${x.filas.length} registros`),
       '',
       'Notas:',
       '  - La tabla usuarios incluye las contraseñas cifradas (hash). Guarda este archivo en un lugar seguro.',
-      '  - En la tabla entregas, archivo_ruta guarda la ruta del servidor donde estaba cada PDF;',
-      '    si restauras en otro equipo, esa ruta se debe ajustar a la nueva ubicación de la carpeta entregas.',
-      hayEntregas ? '' : '  - No se encontró la carpeta uploads/entregas, por eso este respaldo no incluye PDF.',
+      '  - En las tablas entregas y entrega_archivos, archivo_ruta guarda la ruta del servidor donde estaba cada PDF;',
+      '    en solicitudes_mp y solicitud_mp_archivos ocurre lo mismo (archivo_pdf y ruta).',
+      '    Si restauras en otro equipo, esas rutas se deben ajustar a la nueva ubicación de las carpetas.',
+      hayEntregas ? '' : '  - No se encontró la carpeta uploads/entregas, por eso este respaldo no incluye PDF de entregas.',
+      haySolicitudes ? '' : '  - No se encontró la carpeta uploads/solicitudes, por eso este respaldo no incluye oficios de solicitudes.',
     ].join('\n');
 
     zip.append(leeme, { name: 'LEEME.txt' });
@@ -72,6 +79,7 @@ router.get('/', requerirRol('Administrador'), async (req, res) => {
       zip.append(JSON.stringify(x.filas, null, 2), { name: `base_de_datos/${x.nombre}.json` });
     }
     if (hayEntregas) zip.directory(DIR_ENTREGAS, 'entregas');
+    if (haySolicitudes) zip.directory(DIR_SOLICITUDES, 'solicitudes');
 
     await zip.finalize();
   } catch (error) {

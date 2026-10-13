@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AppLayout from "../reutilizables/AppLayout";
 import { peticionesApi } from "../api/peticiones";
+import { api } from "../api/client";
 import { SelectField } from "../reutilizables/Field";
 
 const TIPOS = [
@@ -18,8 +19,9 @@ export default function PeticionPerito() {
 
   const [peticion, setPeticion] = useState(null);
   const [entrega, setEntrega] = useState(null);
+  const [pdfsCargados, setPdfsCargados] = useState([]);
   const [tipo, setTipo] = useState("");
-  const [archivo, setArchivo] = useState(null);
+  const [archivos, setArchivos] = useState([]);
 
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
@@ -30,6 +32,15 @@ export default function PeticionPerito() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function cargarPdfs() {
+    try {
+      const lista = await api.get(`/peticiones/${id}/entrega/archivos`);
+      setPdfsCargados(Array.isArray(lista) ? lista : []);
+    } catch {
+      setPdfsCargados([]);
+    }
+  }
 
   async function cargar() {
     setError("");
@@ -42,6 +53,7 @@ export default function PeticionPerito() {
       setPeticion(datosPeticion);
       setEntrega(datosEntrega);
       setTipo(datosEntrega?.tipo || "");
+      await cargarPdfs();
     } catch (err) {
       setError(err.message || "No se encontró la petición.");
     } finally {
@@ -57,21 +69,27 @@ export default function PeticionPerito() {
       setError("Selecciona qué vas a entregar: dictamen, informe o requerimiento.");
       return;
     }
-    if (!archivo) {
-      setError("Adjunta el PDF de la entrega.");
+    if (archivos.length === 0) {
+      setError("Adjunta al menos un PDF.");
       return;
     }
-    if (archivo.type !== "application/pdf") {
-      setError("El archivo debe ser un PDF.");
+    if (archivos.some((f) => f.type !== "application/pdf")) {
+      setError("Todos los archivos deben ser PDF.");
       return;
     }
+
+    const fd = new FormData();
+    archivos.forEach((f) => fd.append("archivos", f)); // mismo nombre para todos
+    fd.append("tipo", tipo);
+
     setSubiendo(true);
     try {
-      const guardada = await peticionesApi.subirEntrega(id, { tipo, archivo });
-      setEntrega(guardada);
-      setArchivo(null);
+      const guardada = await api.postForm(`/peticiones/${id}/entrega`, fd);
+      if (guardada?.tipo) setEntrega(guardada);
+      setAviso(`${archivos.length} PDF(s) subido(s) correctamente.`);
+      setArchivos([]);
       e.target.reset?.();
-      setAviso("Entrega subida correctamente.");
+      await cargarPdfs();
     } catch (err) {
       setError(err.message || "No se pudo subir la entrega.");
     } finally {
@@ -79,13 +97,27 @@ export default function PeticionPerito() {
     }
   }
 
-  async function handleVerPdf() {
+  async function handleVerPdf(archivoId) {
     setError("");
     try {
-      const blob = await peticionesApi.descargarEntrega(id);
+      const blob = await api.getBlob(`/peticiones/${id}/entrega/archivo/${archivoId}`);
       window.open(URL.createObjectURL(blob), "_blank");
     } catch (err) {
       setError(err.message || "No se pudo abrir el PDF.");
+    }
+  }
+
+  async function handleEliminar(archivoId, nombre) {
+    if (!window.confirm(`¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`)) return;
+    setError("");
+    setAviso("");
+    try {
+      await peticionesApi.eliminarArchivoEntrega(id, archivoId);
+      setAviso("PDF eliminado.");
+      await cargarPdfs();
+      setEntrega(await peticionesApi.obtenerEntrega(id).catch(() => null));
+    } catch (err) {
+      setError(err.message || "No se pudo eliminar el PDF.");
     }
   }
 
@@ -144,21 +176,49 @@ export default function PeticionPerito() {
           <div className="card">
             <div className="page-heading" style={{ marginBottom: 16 }}>
               <h2>Tu entrega</h2>
-              <p>Selecciona qué vas a entregar para esta petición y sube el PDF correspondiente.</p>
+              <p>Selecciona qué vas a entregar para esta petición y sube uno o varios PDF.</p>
             </div>
 
-            {entrega ? (
-              <div className="btn-row" style={{ marginBottom: 20, alignItems: "center" }}>
+            {pdfsCargados.length > 0 || entrega ? (
+              <div style={{ marginBottom: 20 }}>
                 <span className="badge badge-done">
-                  Entregado · {TIPOS.find((t) => t.value === entrega.tipo)?.label}
+                  Entregado
+                  {entrega?.tipo
+                    ? ` · ${TIPOS.find((t) => t.value === entrega.tipo)?.label || entrega.tipo}`
+                    : ""}
                 </span>
-                <span className="field-hint" style={{ margin: 0 }}>
-                  {entrega.archivo_nombre} · subido el{" "}
-                  {new Date(entrega.subido_en).toLocaleString("es-MX")}
-                </span>
-                <button type="button" className="btn btn-secondary" onClick={handleVerPdf}>
-                  Ver PDF
-                </button>
+                {pdfsCargados.length > 0 && (
+                  <ul style={{ margin: "12px 0 0", paddingLeft: 18 }}>
+                    {pdfsCargados.map((p) => (
+                      <li key={p.id} style={{ marginBottom: 6 }}>
+                        <strong>
+                          {TIPOS.find((t) => t.value === p.tipo)?.label || p.tipo}
+                        </strong>
+                        {" — "}
+                        {p.nombre_original}
+                        <span className="field-hint" style={{ margin: "0 8px" }}>
+                          {p.subido_en
+                            ? new Date(p.subido_en).toLocaleString("es-MX")
+                            : ""}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => handleVerPdf(p.id)}
+                        >
+                          Ver PDF
+                        </button>{" "}
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => handleEliminar(p.id, p.nombre_original)}
+                        >
+                          Eliminar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ) : (
               <div className="btn-row" style={{ marginBottom: 20 }}>
@@ -181,16 +241,38 @@ export default function PeticionPerito() {
                 <input
                   type="file"
                   accept="application/pdf"
-                  onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+                  multiple
+                  onChange={(e) => {
+                    const nuevos = Array.from(e.target.files || []); // copiar ANTES de limpiar
+                    e.target.value = ""; // permite volver a elegir el mismo archivo
+                    setArchivos((prev) => [...prev, ...nuevos]);
+                  }}
                 />
                 <span className="field-hint" style={{ margin: 0 }}>
-                  Solo PDF, máximo 20 MB.
+                  Solo PDF, máximo 20 MB cada uno y hasta 10 por envío.
                 </span>
               </div>
 
+              {archivos.length > 0 && (
+                <ul style={{ margin: "12px 0 0", paddingLeft: 18 }}>
+                  {archivos.map((f, i) => (
+                    <li key={i} style={{ marginBottom: 4 }}>
+                      {f.name}{" "}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setArchivos((p) => p.filter((_, j) => j !== i))}
+                      >
+                        Quitar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <div className="btn-row end" style={{ marginTop: 20 }}>
                 <button className="btn btn-primary" type="submit" disabled={subiendo}>
-                  {subiendo ? "Subiendo..." : entrega ? "Reemplazar PDF" : "Subir PDF"}
+                  {subiendo ? "Subiendo..." : "Subir PDF"}
                 </button>
               </div>
             </form>

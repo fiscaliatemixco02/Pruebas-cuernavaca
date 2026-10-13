@@ -19,19 +19,41 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
 const DIR_ENTREGAS = path.join(__dirname, '..', 'uploads', 'entregas');
 fs.mkdirSync(DIR_ENTREGAS, { recursive: true });
 
+const MAX_ARCHIVOS = 10;
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: DIR_ENTREGAS,
-    filename: (req, file, cb) => cb(null, `${req.params.id}-${Date.now()}.pdf`),
+    // sufijo aleatorio: varios archivos pueden llegar en el mismo milisegundo
+    filename: (req, file, cb) =>
+      cb(null, `${req.params.id}-${Date.now()}-${Math.round(Math.random() * 1e6)}.pdf`),
   }),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB por archivo
   fileFilter: (req, file, cb) => {
     const esPdf =
       file.mimetype === 'application/pdf' &&
       path.extname(file.originalname).toLowerCase() === '.pdf';
-    cb(esPdf ? null : new Error('Solo se permiten archivos PDF'), esPdf);
+    cb(esPdf ? null : new Error('Todos los archivos deben ser PDF'), esPdf);
   },
 });
+
+// El campo del FormData debe llamarse "archivos" (uno por cada PDF)
+function subirArchivos(req, res, next) {
+  upload.array('archivos', MAX_ARCHIVOS)(req, res, (err) => {
+    if (!err) return next();
+    let msg = err.message;
+    if (err.code === 'LIMIT_FILE_SIZE') msg = 'Un PDF supera los 20 MB';
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = `Máximo ${MAX_ARCHIVOS} archivos por envío`;
+    res.status(400).json({ error: msg });
+  });
+}
+
+// Acepta rutas guardadas como nombre de archivo o como ruta completa
+function rutaAbsoluta(guardada) {
+  return path.isAbsolute(guardada)
+    ? guardada
+    : path.join(DIR_ENTREGAS, path.basename(guardada));
+}
 
 const COLUMNA_ENTREGA = {
   dictamen: 'entrega_dictamen',
@@ -748,25 +770,24 @@ router.put('/:id', requerirRol('Administrador', 'Receptor'), async (req, res) =>
   }
 });
 
-// ---------- SUBIR PDF (Administrador o Perito asignado) ----------
+// ---------- SUBIR PDF(s) (Administrador o Perito asignado) ----------
 router.post(
   '/:id/entrega',
   requerirRol('Administrador', 'Perito'),
-  (req, res, next) =>
-    upload.single('archivo')(req, res, (err) =>
-      err ? res.status(400).json({ error: err.message }) : next()
-    ),
+  subirArchivos,
   async (req, res) => {
     const { id } = req.params;
     const { tipo } = req.body;
-    const borrar = () => req.file && fs.unlink(req.file.path, () => {});
+    const archivos = req.files || [];
+    const borrar = () => archivos.forEach((f) => fs.unlink(f.path, () => {}));
 
     if (!/^\d+$/.test(id)) { borrar(); return res.status(400).json({ error: 'Id inválido' }); }
-    if (!req.file) return res.status(400).json({ error: 'Adjunta un archivo PDF' });
+    if (archivos.length === 0) return res.status(400).json({ error: 'Adjunta al menos un archivo PDF' });
     if (!COLUMNA_ENTREGA[tipo]) { borrar(); return res.status(400).json({ error: 'Tipo de entrega inválido' }); }
 
+    const client = await pool.connect();
     try {
-      const p = await pool.query(
+      const p = await client.query(
         'SELECT perito_id, firmado_en, numero_llamado FROM peticiones WHERE id = $1',
         [id]
       );
@@ -777,15 +798,25 @@ router.post(
         return res.status(403).json({ error: 'Esta petición no está asignada a ti' });
       }
 
-      // Una entrega ya firmada no puede reemplazarse por el perito
+      // Una entrega ya firmada no puede modificarse por el perito
       if (req.usuario.rol === 'Perito' && p.rows[0].firmado_en) {
         borrar();
-        return res.status(409).json({ error: 'La entrega ya fue firmada y no se puede reemplazar' });
+        return res.status(409).json({ error: 'La entrega ya fue firmada y no se puede modificar' });
       }
 
-      const previo = await pool.query('SELECT archivo_ruta FROM entregas WHERE peticion_id = $1', [id]);
+      await client.query('BEGIN');
 
-      const guardada = await pool.query(
+      // Un registro por cada PDF (los anteriores se conservan)
+      for (const f of archivos) {
+        await client.query(
+          `INSERT INTO entrega_archivos (peticion_id, tipo, archivo_nombre, archivo_ruta, subido_por)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [id, tipo, f.originalname, f.path, req.usuario.id]
+        );
+      }
+
+      // `entregas` sigue siendo 1 fila por petición (la usan por-firmar, pendientes y reportes)
+      const guardada = await client.query(
         `INSERT INTO entregas (peticion_id, tipo, archivo_nombre, archivo_ruta, subido_por)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (peticion_id) DO UPDATE
@@ -795,29 +826,30 @@ router.post(
                subido_por = EXCLUDED.subido_por,
                subido_en = NOW()
          RETURNING tipo, archivo_nombre, subido_en`,
-        [id, tipo, req.file.originalname, req.file.path, req.usuario.id]
+        [id, tipo, archivos[0].originalname, archivos[0].path, req.usuario.id]
       );
 
-      // Deja marcada solo la casilla del tipo entregado
-      await pool.query(
-        `UPDATE peticiones
-            SET entrega_dictamen = $2, entrega_informe = $3, entrega_requerimiento = $4
-          WHERE id = $1`,
-        [id, tipo === 'dictamen', tipo === 'informe', tipo === 'requerimiento']
+      // Marca la casilla del tipo entregado (las anteriores se conservan)
+      await client.query(
+        `UPDATE peticiones SET ${COLUMNA_ENTREGA[tipo]} = TRUE WHERE id = $1`,
+        [id]
       );
 
-      if (previo.rows[0]?.archivo_ruta) fs.unlink(previo.rows[0].archivo_ruta, () => {});
+      await client.query('COMMIT');
 
       await notificarRoles(
         ['Administrador', 'Receptor'], req.usuario.id, id, 'lista_firma',
         `El llamado ${p.rows[0].numero_llamado} ya tiene PDF y está listo para firmarse`
       );
 
-      res.status(201).json(guardada.rows[0]);
+      res.status(201).json({ ...guardada.rows[0], total: archivos.length });
     } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
       borrar();
       console.error('ERROR ENTREGA:', error);
       res.status(500).json({ error: 'Error al guardar la entrega: ' + error.message });
+    } finally {
+      client.release();
     }
   }
 );
@@ -846,24 +878,176 @@ router.get('/:id/entrega', requerirRol(...TODOS), async (req, res) => {
   }
 });
 
-// ---------- DESCARGAR EL PDF ----------
-router.get('/:id/entrega/archivo', requerirRol(...TODOS), async (req, res) => {
+// Comprueba que el perito solo acceda a sus peticiones. Devuelve true si puede continuar.
+async function accesoEntrega(req, res) {
   const { id } = req.params;
-  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Id inválido' });
+  if (!/^\d+$/.test(id)) {
+    res.status(400).json({ error: 'Id inválido' });
+    return false;
+  }
+  const p = await pool.query('SELECT perito_id FROM peticiones WHERE id = $1', [id]);
+  if (!p.rows[0]) {
+    res.status(404).json({ error: 'Petición no encontrada' });
+    return false;
+  }
+  if (req.usuario.rol === 'Perito' && p.rows[0].perito_id !== req.usuario.id) {
+    res.status(403).json({ error: 'Esta petición no está asignada a ti' });
+    return false;
+  }
+  return true;
+}
 
+// ---------- LISTA DE PDFs DE LA ENTREGA ----------
+router.get('/:id/entrega/archivos', requerirRol(...TODOS), async (req, res) => {
   try {
+    if (!(await accesoEntrega(req, res))) return;
     const r = await pool.query(
-      `SELECT e.archivo_nombre, e.archivo_ruta, p.perito_id
-         FROM entregas e JOIN peticiones p ON p.id = e.peticion_id
-        WHERE e.peticion_id = $1`,
-      [id]
+      `SELECT id, tipo, archivo_nombre AS nombre_original, subido_en
+         FROM entrega_archivos
+        WHERE peticion_id = $1
+        ORDER BY subido_en, id`,
+      [req.params.id]
     );
-    const e = r.rows[0];
-    if (!e) return res.status(404).json({ error: 'Sin PDF cargado' });
-    if (req.usuario.rol === 'Perito' && e.perito_id !== req.usuario.id) {
-      return res.status(403).json({ error: 'Esta petición no está asignada a ti' });
+    res.json(r.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al consultar los archivos' });
+  }
+});
+
+// ---------- VER UN PDF CONCRETO ----------
+router.get('/:id/entrega/archivo/:archivoId', requerirRol(...TODOS), async (req, res) => {
+  if (!/^\d+$/.test(req.params.archivoId)) {
+    return res.status(400).json({ error: 'Id de archivo inválido' });
+  }
+  try {
+    if (!(await accesoEntrega(req, res))) return;
+    const r = await pool.query(
+      `SELECT archivo_ruta, archivo_nombre
+         FROM entrega_archivos
+        WHERE id = $1 AND peticion_id = $2`,
+      [req.params.archivoId, req.params.id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'Archivo no encontrado' });
+
+    const ruta = rutaAbsoluta(r.rows[0].archivo_ruta);
+    if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'Archivo no encontrado en disco' });
+
+    res.type('application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(path.resolve(ruta));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al descargar el archivo' });
+  }
+});
+
+// ---------- ELIMINAR UN PDF DE LA ENTREGA (Administrador o Perito asignado) ----------
+// Se usa POST (y no DELETE) para no depender de que el cliente `api` del frontend tenga .delete
+router.post(
+  '/:id/entrega/archivo/:archivoId/eliminar',
+  requerirRol('Administrador', 'Perito'),
+  async (req, res) => {
+    const { id, archivoId } = req.params;
+    if (!/^\d+$/.test(id) || !/^\d+$/.test(archivoId)) {
+      return res.status(400).json({ error: 'Id inválido' });
     }
-    res.download(e.archivo_ruta, e.archivo_nombre);
+
+    const client = await pool.connect();
+    try {
+      const p = await client.query(
+        'SELECT perito_id, firmado_en FROM peticiones WHERE id = $1',
+        [id]
+      );
+      if (!p.rows[0]) return res.status(404).json({ error: 'Petición no encontrada' });
+
+      if (req.usuario.rol === 'Perito' && p.rows[0].perito_id !== req.usuario.id) {
+        return res.status(403).json({ error: 'Esta petición no está asignada a ti' });
+      }
+      if (p.rows[0].firmado_en) {
+        return res.status(409).json({ error: 'La entrega ya fue firmada y no se puede eliminar' });
+      }
+
+      await client.query('BEGIN');
+
+      const borrado = await client.query(
+        'DELETE FROM entrega_archivos WHERE id = $1 AND peticion_id = $2 RETURNING archivo_ruta',
+        [archivoId, id]
+      );
+      if (!borrado.rows[0]) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Archivo no encontrado' });
+      }
+
+      // Último PDF que queda (si queda alguno)
+      const resto = await client.query(
+        `SELECT tipo, archivo_nombre, archivo_ruta, subido_por, subido_en
+           FROM entrega_archivos
+          WHERE peticion_id = $1
+          ORDER BY id DESC LIMIT 1`,
+        [id]
+      );
+
+      if (!resto.rows[0]) {
+        // Ya no hay PDF: la petición vuelve a "pendiente de entrega"
+        await client.query('DELETE FROM entregas WHERE peticion_id = $1', [id]);
+      } else {
+        // `entregas` queda apuntando a un PDF que sí existe
+        const u = resto.rows[0];
+        await client.query(
+          `UPDATE entregas
+              SET tipo = $2, archivo_nombre = $3, archivo_ruta = $4,
+                  subido_por = $5, subido_en = $6
+            WHERE peticion_id = $1`,
+          [id, u.tipo, u.archivo_nombre, u.archivo_ruta, u.subido_por, u.subido_en]
+        );
+      }
+
+      // Las casillas reflejan los tipos que todavía tienen PDF
+      await client.query(
+        `UPDATE peticiones SET
+           entrega_dictamen      = EXISTS (SELECT 1 FROM entrega_archivos WHERE peticion_id = $1 AND tipo = 'dictamen'),
+           entrega_informe       = EXISTS (SELECT 1 FROM entrega_archivos WHERE peticion_id = $1 AND tipo = 'informe'),
+           entrega_requerimiento = EXISTS (SELECT 1 FROM entrega_archivos WHERE peticion_id = $1 AND tipo = 'requerimiento')
+         WHERE id = $1`,
+        [id]
+      );
+
+      await client.query('COMMIT');
+
+      // El archivo físico se borra hasta que la BD ya quedó guardada
+      fs.unlink(rutaAbsoluta(borrado.rows[0].archivo_ruta), () => {});
+
+      res.json({ ok: true, quedan: resto.rows[0] ? true : false });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error(error);
+      res.status(500).json({ error: 'Error al eliminar el archivo' });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+// ---------- COMPATIBILIDAD: ÚLTIMO PDF CARGADO ----------
+router.get('/:id/entrega/archivo', requerirRol(...TODOS), async (req, res) => {
+  try {
+    if (!(await accesoEntrega(req, res))) return;
+    const r = await pool.query(
+      `SELECT archivo_ruta, archivo_nombre
+         FROM entrega_archivos
+        WHERE peticion_id = $1
+        ORDER BY id DESC LIMIT 1`,
+      [req.params.id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'Sin PDF cargado' });
+
+    const ruta = rutaAbsoluta(r.rows[0].archivo_ruta);
+    if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'Archivo no encontrado en disco' });
+
+    res.type('application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(path.resolve(ruta));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al descargar el archivo' });

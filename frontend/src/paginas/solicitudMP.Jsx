@@ -7,7 +7,7 @@ const vacio = { numero_carpeta: "", materia_id: "", breve_resena: "" };
 
 export default function SolicitudMP() {
   const [form, setForm] = useState(vacio);
-  const [pdf, setPdf] = useState(null);
+  const [pdfs, setPdfs] = useState([]);
   const [materias, setMaterias] = useState([]);
   const [lista, setLista] = useState([]);
   const [error, setError] = useState("");
@@ -31,19 +31,21 @@ export default function SolicitudMP() {
     if (!form.numero_carpeta || !form.materia_id || !form.breve_resena) {
       return setError("Todos los campos son obligatorios.");
     }
-    if (!pdf) return setError("Debes adjuntar el PDF.");
-    if (pdf.type !== "application/pdf") return setError("El archivo debe ser PDF.");
+    if (pdfs.length === 0) return setError("Debes adjuntar al menos un PDF.");
+    if (pdfs.some((f) => f.type !== "application/pdf")) {
+      return setError("Todos los archivos deben ser PDF.");
+    }
 
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-    fd.append("pdf", pdf);
+    pdfs.forEach((f) => fd.append("pdfs", f)); // mismo nombre para todos
 
     setLoading(true);
     try {
       await solicitudesMpApi.crear(fd);
       setSuccess("Solicitud enviada al receptor.");
       setForm(vacio);
-      setPdf(null);
+      setPdfs([]);
       formEl.reset();
       cargar();
     } catch (err) {
@@ -77,14 +79,34 @@ export default function SolicitudMP() {
             />
             <div>
               <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                Oficio de solicitud (PDF)
+                Oficio de solicitud (PDF, uno o varios)
               </label>
               <input
                 type="file"
                 accept="application/pdf"
-                onChange={(e) => setPdf(e.target.files[0] || null)}
-                required
+                multiple
+                onChange={(e) => {
+                  const nuevos = Array.from(e.target.files || []); // copiar ANTES de limpiar
+                  e.target.value = ""; // permite volver a elegir el mismo archivo
+                  setPdfs((prev) => [...prev, ...nuevos]);
+                }}
               />
+              {pdfs.length > 0 && (
+                <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                  {pdfs.map((f, i) => (
+                    <li key={i}>
+                      {f.name}{" "}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setPdfs((p) => p.filter((_, j) => j !== i))}
+                      >
+                        Quitar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
           <TextArea

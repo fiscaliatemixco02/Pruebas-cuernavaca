@@ -13,14 +13,14 @@ function soloFecha(valor) {
   return typeof valor === "string" && /^\d{4}-\d{2}-\d{2}T/.test(valor) ? valor.slice(0, 10) : valor;
 }
 
-/* Tarjeta de una petición: datos, PDF y firma de recepción (debajo del PDF) */
+/* Tarjeta de una petición: datos, estado del PDF y firma de recepción.
+   Los PDF se consultan desde "Ver / editar". */
 export default function PeticionCard({ p, esAdmin, puedeFirmar, nombreUsuario, onFirmado }) {
   const [entrega, setEntrega] = useState(undefined); // undefined = cargando, null = sin PDF
   const [abierto, setAbierto] = useState(false);
   const [contrasena, setContrasena] = useState("");
   const [firmando, setFirmando] = useState(false);
   const [error, setError] = useState("");
-  const [errorPdf, setErrorPdf] = useState("");
 
   useEffect(() => {
     let vivo = true;
@@ -32,16 +32,6 @@ export default function PeticionCard({ p, esAdmin, puedeFirmar, nombreUsuario, o
       vivo = false;
     };
   }, [p.id]);
-
-  async function abrirPdf() {
-    setErrorPdf("");
-    try {
-      const blob = await peticionesApi.descargarEntrega(p.id);
-      window.open(URL.createObjectURL(blob), "_blank");
-    } catch (err) {
-      setErrorPdf(err.message || "No se pudo abrir el PDF.");
-    }
-  }
 
   function cancelar() {
     setAbierto(false);
@@ -99,7 +89,7 @@ export default function PeticionCard({ p, esAdmin, puedeFirmar, nombreUsuario, o
         </div>
       </div>
 
-      {/* PDF */}
+      {/* Estado del PDF (para verlo, usa "Ver / editar") */}
       <div style={{ marginTop: 12 }}>
         <span className="label">Entrega (PDF)</span>
         {entrega === undefined ? (
@@ -107,18 +97,11 @@ export default function PeticionCard({ p, esAdmin, puedeFirmar, nombreUsuario, o
         ) : entrega === null ? (
           <div className="table-empty">El perito todavía no carga el PDF.</div>
         ) : (
-          <>
-            {errorPdf ? <div className="status-banner error">{errorPdf}</div> : null}
-            <div className="btn-row">
-              <button type="button" className="btn btn-secondary" onClick={abrirPdf}>
-                Ver PDF cargado
-              </button>
-            </div>
-          </>
+          <span className="value">Cargado</span>
         )}
       </div>
 
-      {/* Firma de recepción: justo debajo del PDF */}
+      {/* Firma de recepción */}
       {entrega && (
         <div style={{ marginTop: 12 }}>
           <span className="label">Firma de recepción</span>
