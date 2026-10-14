@@ -18,6 +18,7 @@ import { VISTAS } from "./paginas/permisos";
 import PorFirmar from "./paginas/PorFirmar";
 import Respaldo from "./paginas/Respaldo";
 import SolicitudMP from "./paginas/SolicitudMP";
+import CarpetasMP from "./paginas/CarpetasMP";
 import SolicitudesRecibidas from "./paginas/SolicitudesRecibidas";
 
 export default function App() {
@@ -87,6 +88,10 @@ export default function App() {
         <Route
           path="/solicitud-mp"
           element={<ProtectedRoute roles={VISTAS.solicitudMP}><SolicitudMP /></ProtectedRoute>}
+        />
+        <Route
+          path="/mis-carpetas"
+          element={<ProtectedRoute roles={VISTAS.misCarpetas}><CarpetasMP /></ProtectedRoute>}
         />
         <Route
           path="/solicitudes-recibidas"
