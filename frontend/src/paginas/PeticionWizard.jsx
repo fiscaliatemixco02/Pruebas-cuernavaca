@@ -65,6 +65,8 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
       ? {
           numero_carpeta: solicitudMp.numero_carpeta ?? "",
           descripcion_solicitud: solicitudMp.breve_resena ?? "",
+          // Nombre del MP que envió la solicitud (el campo se guarda en mayúsculas)
+          nombre_ministerio_publico: String(solicitudMp.nombre_mp ?? "").toUpperCase(),
         }
       : {}),
     ...(initialData
@@ -454,6 +456,9 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
               label="Nombre de MP"
               value={form.nombre_ministerio_publico}
               onChange={(e) => updateMayus("nombre_ministerio_publico", e.target.value)}
+              // Al atender una solicitud de MP el nombre viene de la solicitud y no se puede borrar
+              readOnly={Boolean(solicitudMp)}
+              style={solicitudMp ? { cursor: "not-allowed" } : undefined}
               required
             />
             <RadioGroup

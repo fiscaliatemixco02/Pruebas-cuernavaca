@@ -27,6 +27,45 @@ const upload = multer({
   },
 });
 
+// Crea la carpeta si no existe (sin importar mayúsculas). Usa el mismo client de la transacción.
+// Devuelve { numero_carpeta, creada }.
+async function asegurarCarpeta(client, numero) {
+  const nueva = await client.query(
+    `INSERT INTO carpetas (numero_carpeta)
+     SELECT $1::text
+      WHERE NOT EXISTS (SELECT 1 FROM carpetas WHERE UPPER(numero_carpeta) = $1::text)
+     ON CONFLICT DO NOTHING
+     RETURNING numero_carpeta`,
+    [numero]
+  );
+  if (nueva.rows.length > 0) return { numero_carpeta: nueva.rows[0].numero_carpeta, creada: true };
+
+  // Ya existía: si estaba dada de baja (activo = false) se reactiva para que vuelva a aparecer
+  const r = await client.query(
+    `UPDATE carpetas SET activo = true
+      WHERE UPPER(numero_carpeta) = $1
+      RETURNING numero_carpeta`,
+    [numero]
+  );
+  return { numero_carpeta: r.rows[0]?.numero_carpeta ?? numero, creada: false };
+}
+
+// Avisa a todos los Administradores y Receptores. Un fallo aquí nunca debe romper el envío.
+async function notificarReceptores(mensaje) {
+  try {
+    await pool.query(
+      `INSERT INTO notificaciones (us_id, pet_id, tipo, mensaje)
+       SELECT u.id, NULL, 'solicitud_mp', $1::text
+         FROM usuarios u
+         JOIN roles r ON r.id = u.rol_id
+        WHERE r.nom_rol = ANY($2)`,
+      [mensaje, [ADMIN, RECEPTOR]]
+    );
+  } catch (error) {
+    console.error('No se pudo notificar la solicitud de MP:', error.message);
+  }
+}
+
 // Devuelve la solicitud si el usuario puede verla; si no, responde el error y devuelve null
 async function solicitudAccesible(req, res) {
   const u = quien(req);
@@ -76,13 +115,16 @@ router.post('/', requerirRol(MP), (req, res) => {
     try {
       await client.query('BEGIN');
 
+      // La carpeta se crea (o se reutiliza) en cuanto el MP envía la solicitud
+      const carpeta = await asegurarCarpeta(client, numero_carpeta.trim().toUpperCase());
+
       // archivo_pdf conserva la ruta del primer PDF (compatibilidad con la vista y datos anteriores)
       const r = await client.query(
         `INSERT INTO solicitudes_mp (mp_id, numero_carpeta, materia_id, breve_resena, archivo_pdf)
          VALUES ($1,$2,$3,$4,$5) RETURNING *`,
         [
           quien(req).id,
-          numero_carpeta.toUpperCase(),
+          carpeta.numero_carpeta,
           materia_id,
           breve_resena.toUpperCase(),
           archivos[0].path,
@@ -99,7 +141,20 @@ router.post('/', requerirRol(MP), (req, res) => {
       }
 
       await client.query('COMMIT');
-      res.status(201).json({ ...solicitud, total_pdfs: archivos.length });
+
+      // Aviso a Administradores y Receptores (fuera de la transacción)
+      const nombreMp = quien(req).nombre ? ` de ${quien(req).nombre}` : '';
+      await notificarReceptores(
+        carpeta.creada
+          ? `Nueva carpeta ${carpeta.numero_carpeta}: solicitud${nombreMp}`
+          : `Nueva solicitud${nombreMp} en la carpeta ${carpeta.numero_carpeta}`
+      );
+
+      res.status(201).json({
+        ...solicitud,
+        total_pdfs: archivos.length,
+        carpeta_creada: carpeta.creada,
+      });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       descartar();

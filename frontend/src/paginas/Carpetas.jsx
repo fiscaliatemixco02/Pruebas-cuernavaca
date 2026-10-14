@@ -175,6 +175,7 @@ export default function Carpetas() {
   const [peticiones, setPeticiones] = useState([]);
   const [cargandoPeticiones, setCargandoPeticiones] = useState(false);
   const [errorPeticiones, setErrorPeticiones] = useState("");
+  const [solicitudes, setSolicitudes] = useState([]); // solicitudes de MP de la carpeta abierta
 
   useEffect(() => {
     carpetasApi
@@ -192,6 +193,7 @@ export default function Carpetas() {
       if (seleccionada?.id === id) {
         setSeleccionada(null);
         setPeticiones([]);
+        setSolicitudes([]);
       }
     } catch (err) {
       setError(err.message || "No se pudo eliminar la carpeta.");
@@ -209,12 +211,19 @@ export default function Carpetas() {
         setPeticiones([]);
       })
       .finally(() => setCargandoPeticiones(false));
+
+    // Solicitudes que el MP envió con este número de carpeta
+    carpetasApi
+      .solicitudes(carpeta.id)
+      .then(setSolicitudes)
+      .catch(() => setSolicitudes([]));
   }
 
   function verContenido(carpeta) {
     if (seleccionada?.id === carpeta.id) {
       setSeleccionada(null);
       setPeticiones([]);
+      setSolicitudes([]);
       return;
     }
     setSeleccionada(carpeta);
@@ -224,7 +233,7 @@ export default function Carpetas() {
   return (
     <AppLayout title="Carpetas">
       <div className="page-heading">
-        <p>Las carpetas se crean automáticamente al registrar una petición.</p>
+        <p>Las carpetas se crean automáticamente cuando un MP envía una solicitud o cuando se registra una petición con ese número de carpeta.</p>
       </div>
 
       {error ? <div className="status-banner error">{error}</div> : null}
@@ -282,10 +291,48 @@ export default function Carpetas() {
 
           {errorPeticiones ? <div className="status-banner error">{errorPeticiones}</div> : null}
 
+          {solicitudes.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <h4 style={{ margin: "0 0 8px" }}>Solicitudes del Ministerio Público</h4>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>MP</th>
+                    <th>Área</th>
+                    <th>Reseña</th>
+                    <th>Estado</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {solicitudes.map((s) => (
+                    <tr key={s.id}>
+                      <td>{String(s.created_at).slice(0, 10)}</td>
+                      <td>{s.nombre_mp}</td>
+                      <td>{s.materia}</td>
+                      <td>{s.breve_resena}</td>
+                      <td>{s.estado === "ATENDIDA" ? `Atendida (${s.numero_llamado ?? ""})` : "Pendiente"}</td>
+                      <td>
+                        {s.estado === "PENDIENTE" && (
+                          <Link className="btn btn-primary" to="/solicitudes-recibidas">
+                            Atender
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {cargandoPeticiones ? (
             <div className="table-empty">Cargando...</div>
           ) : peticiones.length === 0 ? (
-            <div className="table-empty">Esta carpeta todavía no tiene ninguna petición guardada.</div>
+            <div className="table-empty">
+              Esta carpeta todavía no tiene ninguna petición registrada.
+            </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {peticiones.map((p) => (

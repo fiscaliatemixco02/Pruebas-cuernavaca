@@ -22,6 +22,29 @@ router.get('/', requerirRol(...TODOS), async (req, res) => {
   }
 });
 
+// Solicitudes de MP que llegaron con el número de esta carpeta (Administrador y Receptor)
+router.get('/:id/solicitudes', requerirRol('Administrador', 'Receptor'), async (req, res) => {
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ error: 'Id de carpeta inválido' });
+  }
+
+  try {
+    const resultado = await pool.query(
+      `SELECT v.*
+         FROM vw_solicitudes_mp v
+         JOIN carpetas c ON UPPER(c.numero_carpeta) = UPPER(v.numero_carpeta)
+        WHERE c.id = $1
+        ORDER BY v.created_at DESC`,
+      [id]
+    );
+    res.json(resultado.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al consultar las solicitudes de la carpeta' });
+  }
+});
+
 // Crear carpeta nueva (solo Administrador)
 router.post('/', requerirRol('Administrador'), async (req, res) => {
   const { numero_carpeta } = req.body;
