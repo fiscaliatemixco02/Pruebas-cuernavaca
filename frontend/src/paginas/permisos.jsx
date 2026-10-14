@@ -43,6 +43,7 @@ export const VISTAS = {
   porFirmar:      [ADMIN, RECEPTOR],
   respaldo:       [ADMIN],
   solicitudMP:          [MP],
+  misCarpetas:          [MP],
   solicitudesRecibidas: [ADMIN, RECEPTOR],
 };
 export function puedeVer(rol, vista) {

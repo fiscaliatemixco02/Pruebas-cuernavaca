@@ -86,6 +86,7 @@ const NAV_ITEMS = [
   { to: "/", label: "Inicio", icon: "inicio", end: true, vista: "inicio" },
   { to: "/peticiones/nueva", label: "Nuevo Registro", icon: "nuevo", vista: "nuevoRegistro" },
   { to: "/solicitud-mp", label: "Solicitud MP", icon: "nuevo", vista: "solicitudMP" },
+  { to: "/mis-carpetas", label: "Carpetas", icon: "expedientes", vista: "misCarpetas" },
   { to: "/usuarios", label: "Personal", icon: "personal", vista: "usuarios" },
   { to: "/peticiones/buscar", label: "Expedientes", icon: "expedientes", expandable: true, vista: "expedientes" },
   { to: "/por-firmar", label: "Por Firmar", icon: "expedientes", vista: "porFirmar" },
@@ -118,6 +119,8 @@ const puedeFirmar = user?.rol === "Administrador" || user?.rol === "Receptor";
 const puntos = {
   notificaciones: esPerito && conteo.por_entregar > 0,
   porFirmar: puedeFirmar && conteo.por_firmar > 0,
+  // Solicitudes nuevas de MP sin revisar (Administrador y Receptor)
+  solicitudesRecibidas: puedeFirmar && pendientes.some((n) => n.tipo === "solicitud_mp"),
 };
 
 
@@ -125,6 +128,7 @@ const puntos = {
   useEffect(() => {
     const tipo =
       pathname === "/por-firmar" ? "lista_firma" :
+      pathname === "/solicitudes-recibidas" ? "solicitud_mp" :
       pathname === "/notificaciones" ? "asignada" : null;
     if (!tipo) return;
 

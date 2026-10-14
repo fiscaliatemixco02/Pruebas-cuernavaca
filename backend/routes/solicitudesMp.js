@@ -18,6 +18,11 @@ const quien = (req) => req.user || req.usuario || {};
 const DIR = path.join(__dirname, '..', 'uploads', 'solicitudes');
 fs.mkdirSync(DIR, { recursive: true });
 
+// PDF que sube el perito (misma carpeta que usa routes/peticiones.js)
+const DIR_ENTREGAS = path.join(__dirname, '..', 'uploads', 'entregas');
+const rutaEntrega = (guardada) =>
+  path.isAbsolute(guardada) ? guardada : path.join(DIR_ENTREGAS, path.basename(guardada));
+
 const upload = multer({
   dest: DIR,
   limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB por archivo
@@ -73,7 +78,7 @@ async function solicitudAccesible(req, res) {
     res.status(400).json({ error: 'Id inválido' });
     return null;
   }
-  const r = await pool.query('SELECT id, mp_id, archivo_pdf FROM solicitudes_mp WHERE id = $1', [
+  const r = await pool.query('SELECT id, mp_id, archivo_pdf, peticion_id FROM solicitudes_mp WHERE id = $1', [
     req.params.id,
   ]);
   const s = r.rows[0];
@@ -179,6 +184,74 @@ router.get('/', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al consultar solicitudes' });
+  }
+});
+
+// Carpetas del MP: una por cada número de carpeta de SUS solicitudes (solo lectura)
+router.get('/carpetas', requerirRol(MP), async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT UPPER(s.numero_carpeta) AS numero_carpeta,
+              COUNT(*)::int AS total_solicitudes,
+              COUNT(*) FILTER (
+                WHERE EXISTS (SELECT 1 FROM entrega_archivos ea WHERE ea.peticion_id = s.peticion_id)
+              )::int AS con_resolucion,
+              MAX(s.created_at) AS ultima
+         FROM solicitudes_mp s
+        WHERE s.mp_id = $1
+        GROUP BY UPPER(s.numero_carpeta)
+        ORDER BY ultima DESC`,
+      [quien(req).id]
+    );
+    res.json(r.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al consultar las carpetas' });
+  }
+});
+
+// Resolución del perito para una solicitud: lista de PDF (vacía si el perito aún no sube nada)
+router.get('/:id/resolucion', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
+  try {
+    const s = await solicitudAccesible(req, res);
+    if (!s) return;
+    if (!s.peticion_id) return res.json([]);
+    const r = await pool.query(
+      `SELECT id, tipo, archivo_nombre AS nombre_original, subido_en
+         FROM entrega_archivos
+        WHERE peticion_id = $1
+        ORDER BY subido_en, id`,
+      [s.peticion_id]
+    );
+    res.json(r.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al consultar la resolución' });
+  }
+});
+
+// Ver un PDF de la resolución (solo si pertenece a la petición ligada a esa solicitud)
+router.get('/:id/resolucion/:archivoId', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.archivoId)) {
+      return res.status(400).json({ error: 'Id de archivo inválido' });
+    }
+    const s = await solicitudAccesible(req, res);
+    if (!s) return;
+    if (!s.peticion_id) return res.sendStatus(404);
+    const r = await pool.query(
+      'SELECT archivo_ruta FROM entrega_archivos WHERE id = $1 AND peticion_id = $2',
+      [req.params.archivoId, s.peticion_id]
+    );
+    if (!r.rows[0]) return res.sendStatus(404);
+    const ruta = rutaEntrega(r.rows[0].archivo_ruta);
+    if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'Archivo no encontrado en disco' });
+    res.type('application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(path.resolve(ruta));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener el PDF' });
   }
 });
 

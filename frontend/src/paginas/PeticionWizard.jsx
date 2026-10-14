@@ -304,9 +304,12 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
         label="Número de carpeta"
         value={form.numero_carpeta}
         onChange={(e) => updateMayus("numero_carpeta", e.target.value)}
-        list="carpetas-existentes"
+        list={solicitudMp ? undefined : "carpetas-existentes"}
         placeholder="Escribe uno nuevo o elige uno existente"
         autoComplete="off"
+        // Al atender una solicitud de MP la carpeta es la que envió el MP y no se cambia
+        readOnly={Boolean(solicitudMp)}
+        style={solicitudMp ? { cursor: "not-allowed" } : undefined}
         required
       />
       <datalist id="carpetas-existentes">
