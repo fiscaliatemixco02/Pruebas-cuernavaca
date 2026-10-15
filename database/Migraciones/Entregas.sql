@@ -10,3 +10,7 @@ CREATE TABLE IF NOT EXISTS entrega_archivos (
 
 
 INSERT INTO roles (nom_rol) VALUES ('AIC'), ('Policia');
+
+  -- Nombre del jefe de grupo (lo captura el AIC al registrar una petición)
+ALTER TABLE peticiones ADD COLUMN IF NOT EXISTS jefe_grupo VARCHAR(150);
+ALTER TABLE entrega_archivos ADD COLUMN IF NOT EXISTS descripcion VARCHAR(500);

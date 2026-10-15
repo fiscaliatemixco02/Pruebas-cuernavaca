@@ -300,6 +300,8 @@ CREATE TABLE IF NOT EXISTS peticiones (
     perito_id INTEGER
         REFERENCES usuarios(id),
 
+    jefe_grupo VARCHAR(150),
+
     entrega_dictamen BOOLEAN DEFAULT FALSE,
     entrega_informe BOOLEAN DEFAULT FALSE,
     entrega_requerimiento BOOLEAN DEFAULT FALSE,

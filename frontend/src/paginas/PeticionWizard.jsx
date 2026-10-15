@@ -17,6 +17,7 @@ const emptyForm = {
   numero_carpeta: "",
   descripcion_solicitud: "",
   perito_id: "", // aquí se guarda el perito o el policía asignado
+  jefe_grupo: "", // AIC: nombre del jefe de grupo (se teclea)
 };
 
 const OPCIONES_ZONA = [
@@ -251,6 +252,7 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
         numero_carpeta: form.numero_carpeta, // si no existe, el backend la crea
         descripcion_solicitud: form.descripcion_solicitud,
         perito_id: form.perito_id || null,
+        jefe_grupo: esAIC ? form.jefe_grupo.trim() : undefined,
       });
       setSuccess("Registro guardado correctamente.");
       onSaved?.(creada);
@@ -293,7 +295,17 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
 
   const bloqueDatosLlamado = (
     <div className="form-grid two-col" style={{ marginBottom: 24 }}>
-      <TextField label={etiquetaNumero} value={meta.numero_llamado} readOnly disabled className="field-readonly" />
+      {esAIC && !esEdicion ? (
+        <TextField
+          label="Asignar jefe de grupo"
+          value={form.jefe_grupo}
+          onChange={(e) => updateMayus("jefe_grupo", e.target.value)}
+          placeholder="Escribe el nombre del jefe de grupo"
+          autoComplete="off"
+        />
+      ) : (
+        <TextField label={etiquetaNumero} value={meta.numero_llamado} readOnly disabled className="field-readonly" />
+      )}
       <TextField label="Fecha" value={fmt(meta.fecha_recibido)} readOnly disabled className="field-readonly" />
       <TextField label="Hora" value={fmt(meta.hora_recibido)} readOnly disabled className="field-readonly" />
     </div>
