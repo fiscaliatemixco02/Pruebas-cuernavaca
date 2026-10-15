@@ -4,7 +4,7 @@ import { peticionesApi } from "../api/peticiones";
 import { useAuth } from "../context/AuthContext";
 
 // Roles que pueden consultar /api/peticiones/pendientes (igual que en el backend)
-const ROLES_CON_PENDIENTES = ["Administrador", "Receptor", "Perito"];
+  const ROLES_CON_PENDIENTES = ["Administrador", "Receptor", "AIC", "Perito", "Policia"];
 
 export default function useTrabajoPendiente() {
   const { pathname } = useLocation();

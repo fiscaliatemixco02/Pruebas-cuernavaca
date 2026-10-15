@@ -10,6 +10,7 @@ const router = express.Router();
 const MP = 'Ministerio Publico';
 const ADMIN = 'Administrador';
 const RECEPTOR = 'Receptor';
+const AIC = 'AIC';
 
 const MAX_ARCHIVOS = 10;
 
@@ -17,11 +18,6 @@ const quien = (req) => req.user || req.usuario || {};
 
 const DIR = path.join(__dirname, '..', 'uploads', 'solicitudes');
 fs.mkdirSync(DIR, { recursive: true });
-
-// PDF que sube el perito (misma carpeta que usa routes/peticiones.js)
-const DIR_ENTREGAS = path.join(__dirname, '..', 'uploads', 'entregas');
-const rutaEntrega = (guardada) =>
-  path.isAbsolute(guardada) ? guardada : path.join(DIR_ENTREGAS, path.basename(guardada));
 
 const upload = multer({
   dest: DIR,
@@ -32,45 +28,6 @@ const upload = multer({
   },
 });
 
-// Crea la carpeta si no existe (sin importar mayúsculas). Usa el mismo client de la transacción.
-// Devuelve { numero_carpeta, creada }.
-async function asegurarCarpeta(client, numero) {
-  const nueva = await client.query(
-    `INSERT INTO carpetas (numero_carpeta)
-     SELECT $1::text
-      WHERE NOT EXISTS (SELECT 1 FROM carpetas WHERE UPPER(numero_carpeta) = $1::text)
-     ON CONFLICT DO NOTHING
-     RETURNING numero_carpeta`,
-    [numero]
-  );
-  if (nueva.rows.length > 0) return { numero_carpeta: nueva.rows[0].numero_carpeta, creada: true };
-
-  // Ya existía: si estaba dada de baja (activo = false) se reactiva para que vuelva a aparecer
-  const r = await client.query(
-    `UPDATE carpetas SET activo = true
-      WHERE UPPER(numero_carpeta) = $1
-      RETURNING numero_carpeta`,
-    [numero]
-  );
-  return { numero_carpeta: r.rows[0]?.numero_carpeta ?? numero, creada: false };
-}
-
-// Avisa a todos los Administradores y Receptores. Un fallo aquí nunca debe romper el envío.
-async function notificarReceptores(mensaje) {
-  try {
-    await pool.query(
-      `INSERT INTO notificaciones (us_id, pet_id, tipo, mensaje)
-       SELECT u.id, NULL, 'solicitud_mp', $1::text
-         FROM usuarios u
-         JOIN roles r ON r.id = u.rol_id
-        WHERE r.nom_rol = ANY($2)`,
-      [mensaje, [ADMIN, RECEPTOR]]
-    );
-  } catch (error) {
-    console.error('No se pudo notificar la solicitud de MP:', error.message);
-  }
-}
-
 // Devuelve la solicitud si el usuario puede verla; si no, responde el error y devuelve null
 async function solicitudAccesible(req, res) {
   const u = quien(req);
@@ -78,7 +35,7 @@ async function solicitudAccesible(req, res) {
     res.status(400).json({ error: 'Id inválido' });
     return null;
   }
-  const r = await pool.query('SELECT id, mp_id, archivo_pdf, peticion_id FROM solicitudes_mp WHERE id = $1', [
+  const r = await pool.query('SELECT id, mp_id, archivo_pdf FROM solicitudes_mp WHERE id = $1', [
     req.params.id,
   ]);
   const s = r.rows[0];
@@ -120,16 +77,13 @@ router.post('/', requerirRol(MP), (req, res) => {
     try {
       await client.query('BEGIN');
 
-      // La carpeta se crea (o se reutiliza) en cuanto el MP envía la solicitud
-      const carpeta = await asegurarCarpeta(client, numero_carpeta.trim().toUpperCase());
-
       // archivo_pdf conserva la ruta del primer PDF (compatibilidad con la vista y datos anteriores)
       const r = await client.query(
         `INSERT INTO solicitudes_mp (mp_id, numero_carpeta, materia_id, breve_resena, archivo_pdf)
          VALUES ($1,$2,$3,$4,$5) RETURNING *`,
         [
           quien(req).id,
-          carpeta.numero_carpeta,
+          numero_carpeta.toUpperCase(),
           materia_id,
           breve_resena.toUpperCase(),
           archivos[0].path,
@@ -146,20 +100,7 @@ router.post('/', requerirRol(MP), (req, res) => {
       }
 
       await client.query('COMMIT');
-
-      // Aviso a Administradores y Receptores (fuera de la transacción)
-      const nombreMp = quien(req).nombre ? ` de ${quien(req).nombre}` : '';
-      await notificarReceptores(
-        carpeta.creada
-          ? `Nueva carpeta ${carpeta.numero_carpeta}: solicitud${nombreMp}`
-          : `Nueva solicitud${nombreMp} en la carpeta ${carpeta.numero_carpeta}`
-      );
-
-      res.status(201).json({
-        ...solicitud,
-        total_pdfs: archivos.length,
-        carpeta_creada: carpeta.creada,
-      });
+      res.status(201).json({ ...solicitud, total_pdfs: archivos.length });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       descartar();
@@ -172,7 +113,7 @@ router.post('/', requerirRol(MP), (req, res) => {
 });
 
 // Listar: el MP ve las suyas; Receptor y Admin ven todas
-router.get('/', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
+router.get('/', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
   const u = quien(req);
   const esMP = u.rol === MP;
   try {
@@ -187,76 +128,8 @@ router.get('/', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
   }
 });
 
-// Carpetas del MP: una por cada número de carpeta de SUS solicitudes (solo lectura)
-router.get('/carpetas', requerirRol(MP), async (req, res) => {
-  try {
-    const r = await pool.query(
-      `SELECT UPPER(s.numero_carpeta) AS numero_carpeta,
-              COUNT(*)::int AS total_solicitudes,
-              COUNT(*) FILTER (
-                WHERE EXISTS (SELECT 1 FROM entrega_archivos ea WHERE ea.peticion_id = s.peticion_id)
-              )::int AS con_resolucion,
-              MAX(s.created_at) AS ultima
-         FROM solicitudes_mp s
-        WHERE s.mp_id = $1
-        GROUP BY UPPER(s.numero_carpeta)
-        ORDER BY ultima DESC`,
-      [quien(req).id]
-    );
-    res.json(r.rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al consultar las carpetas' });
-  }
-});
-
-// Resolución del perito para una solicitud: lista de PDF (vacía si el perito aún no sube nada)
-router.get('/:id/resolucion', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
-  try {
-    const s = await solicitudAccesible(req, res);
-    if (!s) return;
-    if (!s.peticion_id) return res.json([]);
-    const r = await pool.query(
-      `SELECT id, tipo, archivo_nombre AS nombre_original, subido_en
-         FROM entrega_archivos
-        WHERE peticion_id = $1
-        ORDER BY subido_en, id`,
-      [s.peticion_id]
-    );
-    res.json(r.rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al consultar la resolución' });
-  }
-});
-
-// Ver un PDF de la resolución (solo si pertenece a la petición ligada a esa solicitud)
-router.get('/:id/resolucion/:archivoId', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
-  try {
-    if (!/^\d+$/.test(req.params.archivoId)) {
-      return res.status(400).json({ error: 'Id de archivo inválido' });
-    }
-    const s = await solicitudAccesible(req, res);
-    if (!s) return;
-    if (!s.peticion_id) return res.sendStatus(404);
-    const r = await pool.query(
-      'SELECT archivo_ruta FROM entrega_archivos WHERE id = $1 AND peticion_id = $2',
-      [req.params.archivoId, s.peticion_id]
-    );
-    if (!r.rows[0]) return res.sendStatus(404);
-    const ruta = rutaEntrega(r.rows[0].archivo_ruta);
-    if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'Archivo no encontrado en disco' });
-    res.type('application/pdf');
-    res.setHeader('Content-Disposition', 'inline');
-    res.sendFile(path.resolve(ruta));
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener el PDF' });
-  }
-});
-
 // Lista de PDF de una solicitud
-router.get('/:id/pdfs', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
+router.get('/:id/pdfs', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
   try {
     const s = await solicitudAccesible(req, res);
     if (!s) return;
@@ -273,7 +146,7 @@ router.get('/:id/pdfs', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
 });
 
 // Ver un PDF concreto
-router.get('/:id/pdf/:archivoId', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
+router.get('/:id/pdf/:archivoId', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
   try {
     if (!/^\d+$/.test(req.params.archivoId)) {
       return res.status(400).json({ error: 'Id de archivo inválido' });
@@ -294,7 +167,7 @@ router.get('/:id/pdf/:archivoId', requerirRol(MP, RECEPTOR, ADMIN), async (req, 
 });
 
 // Compatibilidad: devuelve el primer PDF de la solicitud
-router.get('/:id/pdf', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
+router.get('/:id/pdf', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
   try {
     const s = await solicitudAccesible(req, res);
     if (!s) return;
@@ -307,7 +180,7 @@ router.get('/:id/pdf', requerirRol(MP, RECEPTOR, ADMIN), async (req, res) => {
 });
 
 // El receptor marca la solicitud como atendida y la liga a la petición creada
-router.put('/:id/atender', requerirRol(RECEPTOR, ADMIN), async (req, res) => {
+router.put('/:id/atender', requerirRol(RECEPTOR, AIC, ADMIN), async (req, res) => {
   const { peticion_id } = req.body;
   if (!peticion_id) return res.status(400).json({ error: 'Falta peticion_id' });
   try {

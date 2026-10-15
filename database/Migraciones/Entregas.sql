@@ -7,3 +7,6 @@ CREATE TABLE IF NOT EXISTS entrega_archivos (
     subido_por INTEGER REFERENCES usuarios(id),
     subido_en TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+
+INSERT INTO roles (nom_rol) VALUES ('AIC'), ('Policia');
