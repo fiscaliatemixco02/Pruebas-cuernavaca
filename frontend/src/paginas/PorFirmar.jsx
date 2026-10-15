@@ -9,7 +9,7 @@ const INTERVALO_MS = 30000;
 export default function PorFirmar() {
   const { user } = useAuth();
   const esAdmin = user?.rol === "Administrador";
-  const puedeFirmar = esAdmin || user?.rol === "Receptor";
+  const puedeFirmar = esAdmin || user?.rol === "Receptor" || user?.rol === "AIC";
   const nombreUsuario = [user?.nombre, user?.apellidos].filter(Boolean).join(" ");
 
   const [peticiones, setPeticiones] = useState([]);

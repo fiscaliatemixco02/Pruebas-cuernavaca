@@ -16,7 +16,7 @@ const emptyForm = {
   materia_id: "",
   numero_carpeta: "",
   descripcion_solicitud: "",
-  perito_id: "",
+  perito_id: "", // aquí se guarda el perito o el policía asignado
 };
 
 const OPCIONES_ZONA = [
@@ -25,7 +25,7 @@ const OPCIONES_ZONA = [
 ];
 
 // Roles que pueden aparecer como receptor (ajusta si en tu BD se llaman distinto)
-const ROLES_RECEPTOR = ["receptor", "administrador"];
+const ROLES_RECEPTOR = ["receptor", "aic", "administrador"];
 const esRolReceptor = (rol) => ROLES_RECEPTOR.includes(String(rol || "").toLowerCase());
 
 // "2026-09-29T06:00:00.000Z" -> "2026-09-29" ; "13:01:28.411176" -> "13:01:28"
@@ -49,6 +49,16 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
   const { user } = useAuth();
   // En edición, solo el Administrador puede modificar
   const soloLectura = esEdicion && user?.rol !== "Administrador";
+
+  // El AIC asigna policías (no dependen de la materia); el Receptor asigna peritos;
+  // el Administrador puede asignar a cualquiera de los dos.
+  const esAIC = user?.rol === "AIC";
+  const esAdmin = user?.rol === "Administrador";
+  const etiquetaAsignado = esAIC
+    ? "Asignar policía"
+    : esAdmin
+      ? "Asignar perito / policía"
+      : "Asignar perito";
 
   const peticionId = initialData?.id ?? null;
 
@@ -119,17 +129,17 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
       .catch(() => setMaterias([]));
   }, [form.llamado_id]);
 
-  // Peritos: solo los de la materia seleccionada
+  // Peritos de la materia seleccionada. El AIC ve siempre la lista de policías (sin materia).
   useEffect(() => {
-    if (!form.materia_id) {
+    if (!form.materia_id && !esAIC) {
       setPeritos([]);
       return;
     }
     peticionesApi
-      .listarPeritos(form.materia_id)
+      .listarPeritos(esAIC ? undefined : form.materia_id)
       .then(setPeritos)
       .catch(() => setPeritos([]));
-  }, [form.materia_id]);
+  }, [form.materia_id, esAIC]);
 
   const llamadoSeleccionado = llamados.find((l) => String(l.id) === String(form.llamado_id));
   const requiereNumeroManual = llamadoSeleccionado ? !llamadoSeleccionado.es_automatico : false;
@@ -140,21 +150,25 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
   const etiquetaNumero =
     esApoyo || meta.tipo_llamado === "FMAP" ? "Número de apoyo" : "Número de llamado";
 
-  // NUEVA: solo receptores/administradores y únicamente el usuario logueado
+  // NUEVA: solo receptores/AIC/administradores y únicamente el usuario logueado
   const opcionesReceptoresNueva = usuarios
     .filter((u) => esRolReceptor(u.rol))
     .filter((u) => String(u.id) === String(user?.id))
     .map((u) => ({ value: u.id, label: nombreCompleto(u) }));
 
-  // EDICIÓN: solo receptores/administradores (se conserva el receptor actual
+  // EDICIÓN: solo receptores/AIC/administradores (se conserva el receptor actual
   // aunque ya no tenga ese rol, para que el combo no quede en blanco)
   const opcionesReceptoresEdicion = usuarios
     .filter((u) => esRolReceptor(u.rol) || String(u.id) === String(form.receptor_id))
     .map((u) => ({ value: u.id, label: nombreCompleto(u) }));
 
   const opcionesMaterias = materias.map((m) => ({ value: m.id, label: m.nombre }));
-  const opcionesPeritos = peritos.map((p) => ({ value: p.id, label: p.nombre }));
-  // En edición se conserva visible el perito actual aunque no aparezca en la lista de la materia
+  // El Administrador ve de qué tipo es cada persona; los demás solo el nombre
+  const opcionesPeritos = peritos.map((p) => ({
+    value: p.id,
+    label: esAdmin ? `${p.nombre} (${p.rol === "Policia" ? "Policía" : "Perito"})` : p.nombre,
+  }));
+  // En edición se conserva visible el asignado actual aunque no aparezca en la lista
   if (
     initialData?.perito_id &&
     String(form.perito_id) === String(initialData.perito_id) &&
@@ -162,7 +176,7 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
   ) {
     opcionesPeritos.push({
       value: initialData.perito_id,
-      label: initialData.nombre_perito || "Perito actual",
+      label: initialData.nombre_perito || "Asignado actual",
     });
   }
   const opcionesLlamados = llamados.map((l) => ({
@@ -172,7 +186,12 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
 
   function update(field, value) {
     // Si cambia la materia, el perito elegido ya podría no corresponder: se limpia
-    setForm((p) => ({ ...p, [field]: value, ...(field === "materia_id" ? { perito_id: "" } : {}) }));
+    // (el AIC asigna policías, que no dependen de la materia, así que a él no se le limpia)
+    setForm((p) => ({
+      ...p,
+      [field]: value,
+      ...(field === "materia_id" && !esAIC ? { perito_id: "" } : {}),
+    }));
   }
 
   // Todo texto capturado se convierte a mayúsculas mientras se escribe
@@ -209,9 +228,9 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
     setError("");
     setSuccess("");
 
-    // Solo receptores y administradores pueden registrar llamados
+    // Solo receptores, AIC y administradores pueden registrar llamados
     if (!esRolReceptor(user?.rol)) {
-      setError("Solo un receptor o administrador puede registrar llamados.");
+      setError("Solo un receptor, AIC o administrador puede registrar llamados.");
       return;
     }
 
@@ -282,18 +301,24 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
 
   const selectPerito = (
     <SelectField
-      label="Asignar perito"
+      label={etiquetaAsignado}
       options={opcionesPeritos}
       placeholder={
-        !form.materia_id
-          ? "Selecciona primero una materia"
-          : opcionesPeritos.length === 0
-            ? "No hay peritos para esta materia"
-            : "Selecciona un perito..."
+        esAIC
+          ? opcionesPeritos.length === 0
+            ? "No hay policías registrados"
+            : "Selecciona un policía..."
+          : !form.materia_id
+            ? "Selecciona primero una materia"
+            : opcionesPeritos.length === 0
+              ? "No hay peritos para esta materia"
+              : esAdmin
+                ? "Selecciona un perito o policía..."
+                : "Selecciona un perito..."
       }
       value={form.perito_id}
       onChange={(e) => update("perito_id", e.target.value)}
-      disabled={!form.materia_id}
+      disabled={!form.materia_id && !esAIC}
     />
   );
 
@@ -409,7 +434,8 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
                   ...p,
                   llamado_id: e.target.value,
                   materia_id: "",
-                  perito_id: "",
+                  // el AIC asigna policías, que no dependen del llamado ni de la materia
+                  perito_id: esAIC ? p.perito_id : "",
                   numero_llamado_manual: "",
                   zona_apoyo: "",
                   numero_apoyo: "",
@@ -446,7 +472,7 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
               />
             )}
 
-            {/* Solo el usuario logueado (receptor/administrador), bloqueado */}
+            {/* Solo el usuario logueado (receptor/AIC/administrador), bloqueado */}
             <SelectField
               label="Nombre de receptor"
               options={opcionesReceptoresNueva}

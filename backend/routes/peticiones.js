@@ -10,7 +10,41 @@ const { verificarToken, requerirRol } = require('../middleware/auth');
 const router = express.Router();
 router.use(verificarToken);
 
-const TODOS = ['Administrador', 'Receptor', 'Perito', 'Consulta','Ministerio publico'];
+const TODOS = ['Administrador', 'Receptor', 'AIC', 'Perito', 'Policia', 'Consulta', 'Ministerio publico'];
+
+// Roles que reciben peticiones asignadas y suben entregas
+const ROLES_ASIGNADOS = ['Perito', 'Policia'];
+const esAsignado = (rol) => ROLES_ASIGNADOS.includes(rol);
+
+// Qué tipo de asignado le corresponde a cada quien (null = todos)
+//   Receptor -> peritos, AIC -> policías, Administrador -> todos
+function rolAsignadoPara(rol) {
+  if (rol === 'Receptor') return 'Perito';
+  if (rol === 'AIC') return 'Policia';
+  return null;
+}
+
+// Valida a quién se asigna la petición. Devuelve un mensaje de error o null si todo está bien.
+//   - Receptor solo asigna peritos (de la materia de la petición)
+//   - AIC solo asigna policías (sin filtro de materia)
+//   - Administrador puede asignar a cualquiera de los dos
+async function validarAsignado(asignadoId, materiaId, rolActor) {
+  const r = await pool.query(
+    `SELECT r.nom_rol AS rol, u.materia_id
+       FROM usuarios u
+       JOIN roles r ON r.id = u.rol_id
+      WHERE u.id = $1`,
+    [asignadoId]
+  );
+  const u = r.rows[0];
+  if (!u || !esAsignado(u.rol)) return 'La persona seleccionada no es un perito ni un policía';
+  if (rolActor === 'Receptor' && u.rol !== 'Perito') return 'Un receptor solo puede asignar peritos';
+  if (rolActor === 'AIC' && u.rol !== 'Policia') return 'Un AIC solo puede asignar policías';
+  if (u.rol === 'Perito' && String(u.materia_id) !== String(materiaId)) {
+    return 'El perito seleccionado no corresponde a la materia';
+  }
+  return null;
+}
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
   'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -120,7 +154,7 @@ async function notificarRoles(roles, excluirId, petId, tipo, mensaje) {
 // =====================================================================
 
 // ---------- ASIGNADAS AL USUARIO LOGUEADO ----------
-router.get('/asignadas', requerirRol('Administrador', 'Perito'), async (req, res) => {
+router.get('/asignadas', requerirRol('Administrador', 'Perito', 'Policia'), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT v.*, e.tipo AS entrega_tipo
@@ -138,14 +172,19 @@ router.get('/asignadas', requerirRol('Administrador', 'Perito'), async (req, res
 });
 
 // ---------- LLAMADOS LISTOS PARA FIRMAR (PDF cargado, sin firma) ----------
-router.get('/por-firmar', requerirRol('Administrador', 'Receptor'), async (req, res) => {
+router.get('/por-firmar', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
   try {
+    // Receptor ve lo de peritos, AIC lo de policías, Administrador todo
     const r = await pool.query(
       `SELECT v.*
          FROM vw_peticiones v
          JOIN entregas e ON e.peticion_id = v.id
+         LEFT JOIN usuarios ua ON ua.id = v.perito_id
+         LEFT JOIN roles ra ON ra.id = ua.rol_id
         WHERE v.firmado_en IS NULL
-        ORDER BY e.subido_en ASC`
+          AND ($1::text IS NULL OR ra.nom_rol = $1::text)
+        ORDER BY e.subido_en ASC`,
+      [rolAsignadoPara(req.usuario.rol)]
     );
     res.json(r.rows);
   } catch (error) {
@@ -155,19 +194,22 @@ router.get('/por-firmar', requerirRol('Administrador', 'Receptor'), async (req, 
 });
 
 // ---------- CONTEO PARA EL PUNTITO DEL MENÚ ----------
-router.get('/pendientes', requerirRol('Administrador', 'Receptor', 'Perito'), async (req, res) => {
+router.get('/pendientes', requerirRol('Administrador', 'Receptor', 'AIC', 'Perito', 'Policia'), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT
          (SELECT COUNT(*)::int
             FROM peticiones p
             JOIN entregas e ON e.peticion_id = p.id
-           WHERE p.firmado_en IS NULL) AS por_firmar,
+            LEFT JOIN usuarios ua ON ua.id = p.perito_id
+            LEFT JOIN roles ra ON ra.id = ua.rol_id
+           WHERE p.firmado_en IS NULL
+             AND ($2::text IS NULL OR ra.nom_rol = $2::text)) AS por_firmar,
          (SELECT COUNT(*)::int
             FROM peticiones p
            WHERE p.perito_id = $1
              AND NOT EXISTS (SELECT 1 FROM entregas e WHERE e.peticion_id = p.id)) AS por_entregar`,
-      [req.usuario.id]
+      [req.usuario.id, rolAsignadoPara(req.usuario.rol)]
     );
     res.json(r.rows[0]);
   } catch (error) {
@@ -177,7 +219,7 @@ router.get('/pendientes', requerirRol('Administrador', 'Receptor', 'Perito'), as
 });
 
 // ---------- REPORTE MENSUAL EN PDF (debe ir ANTES de /:id) ----------
-router.get('/reporte-mensual', requerirRol('Administrador', 'Receptor', 'Consulta'), async (req, res) => {
+router.get('/reporte-mensual', requerirRol('Administrador', 'Receptor', 'AIC', 'Consulta'), async (req, res) => {
   const mes = parseInt(req.query.mes, 10);
   const anio = parseInt(req.query.anio, 10);
   if (!(mes >= 1 && mes <= 12) || !(anio >= 2000 && anio <= 2100)) {
@@ -473,7 +515,7 @@ router.get('/', requerirRol(...TODOS), async (req, res) => {
   const condiciones = [];
   const params = [];
 
-  if (req.usuario.rol === 'Perito') {
+  if (esAsignado(req.usuario.rol)) {
     params.push(req.usuario.id);
     condiciones.push(`perito_id = $${params.length}`);
   }
@@ -523,7 +565,7 @@ router.get('/:id', requerirRol(...TODOS), async (req, res) => {
     const peticion = r.rows[0];
     if (!peticion) return res.status(404).json({ error: 'Petición no encontrada' });
 
-    if (req.usuario.rol === 'Perito' && peticion.perito_id !== req.usuario.id) {
+    if (esAsignado(req.usuario.rol) && peticion.perito_id !== req.usuario.id) {
       return res.status(403).json({ error: 'Esta petición no está asignada a ti' });
     }
     res.json(peticion);
@@ -535,7 +577,7 @@ router.get('/:id', requerirRol(...TODOS), async (req, res) => {
 
 // ---------- CREAR (Administrador y Receptor) ----------
 // El perito ya se asigna aquí, en el primer formulario.
-router.post('/', requerirRol('Administrador', 'Receptor'), async (req, res) => {
+router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
   const {
     llamado_id,
     nombre_ministerio_publico,
@@ -568,18 +610,11 @@ router.post('/', requerirRol('Administrador', 'Receptor'), async (req, res) => {
       return res.status(400).json({ error: `Esa materia no corresponde al llamado ${codigo}` });
     }
 
-    // Si viene perito, debe ser un usuario con rol Perito y de la misma materia
+    // Si viene asignado: Receptor -> perito de la materia, AIC -> policía, Administrador -> cualquiera
     const peritoFinal = perito_id === '' || perito_id === undefined || perito_id === null ? null : perito_id;
     if (peritoFinal !== null) {
-      const pr = await pool.query(
-        `SELECT 1 FROM usuarios u
-           JOIN roles r ON r.id = u.rol_id
-          WHERE u.id = $1 AND r.nom_rol = 'Perito' AND u.materia_id = $2`,
-        [peritoFinal, materia_id]
-      );
-      if (!pr.rows[0]) {
-        return res.status(400).json({ error: 'El perito seleccionado no es válido o no corresponde a la materia' });
-      }
+      const errorAsignado = await validarAsignado(peritoFinal, materia_id, req.usuario.rol);
+      if (errorAsignado) return res.status(400).json({ error: errorAsignado });
     }
 
     // Número manual (FMG, FMAP): obligatorio; FMAP con formato ZO/123 o JO/123
@@ -644,7 +679,7 @@ router.post('/', requerirRol('Administrador', 'Receptor'), async (req, res) => {
 // ---------- EDITAR ----------
 // Administrador: todo (menos quien recibe/firma, que solo se llena con /firmar).
 // Receptor: solo asignar perito en una petición suya que todavía no tiene perito.
-router.put('/:id', requerirRol('Administrador', 'Receptor'), async (req, res) => {
+router.put('/:id', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Id de petición inválido' });
 
@@ -652,7 +687,7 @@ router.put('/:id', requerirRol('Administrador', 'Receptor'), async (req, res) =>
   const n = (v) => (v === '' || v === undefined ? null : v);
 
   try {
-    if (req.usuario.rol === 'Receptor') {
+    if (req.usuario.rol === 'Receptor' || req.usuario.rol === 'AIC') {
       const p = await pool.query(
         'SELECT receptor_id, perito_id, materia_id FROM peticiones WHERE id = $1',
         [id]
@@ -662,17 +697,10 @@ router.put('/:id', requerirRol('Administrador', 'Receptor'), async (req, res) =>
         return res.status(403).json({ error: 'No tienes permiso para editar esta petición' });
       }
 
-      // El perito debe ser de la materia de la petición
+      // Receptor solo asigna peritos de la materia; AIC solo policías
       if (n(b.perito_id)) {
-        const pr = await pool.query(
-          `SELECT 1 FROM usuarios u
-             JOIN roles r ON r.id = u.rol_id
-            WHERE u.id = $1 AND r.nom_rol = 'Perito' AND u.materia_id = $2`,
-          [n(b.perito_id), p.rows[0].materia_id]
-        );
-        if (!pr.rows[0]) {
-          return res.status(400).json({ error: 'El perito seleccionado no corresponde a la materia' });
-        }
+        const errorAsignado = await validarAsignado(n(b.perito_id), p.rows[0].materia_id, req.usuario.rol);
+        if (errorAsignado) return res.status(400).json({ error: errorAsignado });
       }
 
       const r = await pool.query(
@@ -705,15 +733,8 @@ router.put('/:id', requerirRol('Administrador', 'Receptor'), async (req, res) =>
     const cambioMateria = String(materiaNueva) !== String(previa.rows[0].materia_id);
 
     if (peritoNuevo && (cambioPerito || cambioMateria)) {
-      const pr = await pool.query(
-        `SELECT 1 FROM usuarios u
-           JOIN roles r ON r.id = u.rol_id
-          WHERE u.id = $1 AND r.nom_rol = 'Perito' AND u.materia_id = $2`,
-        [peritoNuevo, materiaNueva]
-      );
-      if (!pr.rows[0]) {
-        return res.status(400).json({ error: 'El perito seleccionado no es válido o no corresponde a la materia' });
-      }
+      const errorAsignado = await validarAsignado(peritoNuevo, materiaNueva, req.usuario.rol);
+      if (errorAsignado) return res.status(400).json({ error: errorAsignado });
     }
 
     const carpetaFinal = b.numero_carpeta ? await asegurarCarpeta(b.numero_carpeta) : null;
@@ -773,7 +794,7 @@ router.put('/:id', requerirRol('Administrador', 'Receptor'), async (req, res) =>
 // ---------- SUBIR PDF(s) (Administrador o Perito asignado) ----------
 router.post(
   '/:id/entrega',
-  requerirRol('Administrador', 'Perito'),
+  requerirRol('Administrador', 'Perito', 'Policia'),
   subirArchivos,
   async (req, res) => {
     const { id } = req.params;
@@ -788,18 +809,22 @@ router.post(
     const client = await pool.connect();
     try {
       const p = await client.query(
-        'SELECT perito_id, firmado_en, numero_llamado FROM peticiones WHERE id = $1',
+        `SELECT p.perito_id, p.firmado_en, p.numero_llamado, ra.nom_rol AS rol_asignado
+           FROM peticiones p
+           LEFT JOIN usuarios ua ON ua.id = p.perito_id
+           LEFT JOIN roles ra ON ra.id = ua.rol_id
+          WHERE p.id = $1`,
         [id]
       );
       if (!p.rows[0]) { borrar(); return res.status(404).json({ error: 'Petición no encontrada' }); }
 
-      if (req.usuario.rol === 'Perito' && p.rows[0].perito_id !== req.usuario.id) {
+      if (esAsignado(req.usuario.rol) && p.rows[0].perito_id !== req.usuario.id) {
         borrar();
         return res.status(403).json({ error: 'Esta petición no está asignada a ti' });
       }
 
       // Una entrega ya firmada no puede modificarse por el perito
-      if (req.usuario.rol === 'Perito' && p.rows[0].firmado_en) {
+      if (esAsignado(req.usuario.rol) && p.rows[0].firmado_en) {
         borrar();
         return res.status(409).json({ error: 'La entrega ya fue firmada y no se puede modificar' });
       }
@@ -837,8 +862,10 @@ router.post(
 
       await client.query('COMMIT');
 
+      // Lo de un policía lo firma el AIC; lo de un perito, el Receptor
       await notificarRoles(
-        ['Administrador', 'Receptor'], req.usuario.id, id, 'lista_firma',
+        p.rows[0].rol_asignado === 'Policia' ? ['Administrador', 'AIC'] : ['Administrador', 'Receptor'],
+        req.usuario.id, id, 'lista_firma',
         `El llamado ${p.rows[0].numero_llamado} ya tiene PDF y está listo para firmarse`
       );
 
@@ -868,7 +895,7 @@ router.get('/:id/entrega', requerirRol(...TODOS), async (req, res) => {
     );
     const e = r.rows[0];
     if (!e) return res.json(null);
-    if (req.usuario.rol === 'Perito' && e.perito_id !== req.usuario.id) {
+    if (esAsignado(req.usuario.rol) && e.perito_id !== req.usuario.id) {
       return res.status(403).json({ error: 'Esta petición no está asignada a ti' });
     }
     res.json({ tipo: e.tipo, archivo_nombre: e.archivo_nombre, subido_en: e.subido_en });
@@ -890,7 +917,7 @@ async function accesoEntrega(req, res) {
     res.status(404).json({ error: 'Petición no encontrada' });
     return false;
   }
-  if (req.usuario.rol === 'Perito' && p.rows[0].perito_id !== req.usuario.id) {
+  if (esAsignado(req.usuario.rol) && p.rows[0].perito_id !== req.usuario.id) {
     res.status(403).json({ error: 'Esta petición no está asignada a ti' });
     return false;
   }
@@ -946,7 +973,7 @@ router.get('/:id/entrega/archivo/:archivoId', requerirRol(...TODOS), async (req,
 // Se usa POST (y no DELETE) para no depender de que el cliente `api` del frontend tenga .delete
 router.post(
   '/:id/entrega/archivo/:archivoId/eliminar',
-  requerirRol('Administrador', 'Perito'),
+  requerirRol('Administrador', 'Perito', 'Policia'),
   async (req, res) => {
     const { id, archivoId } = req.params;
     if (!/^\d+$/.test(id) || !/^\d+$/.test(archivoId)) {
@@ -961,7 +988,7 @@ router.post(
       );
       if (!p.rows[0]) return res.status(404).json({ error: 'Petición no encontrada' });
 
-      if (req.usuario.rol === 'Perito' && p.rows[0].perito_id !== req.usuario.id) {
+      if (esAsignado(req.usuario.rol) && p.rows[0].perito_id !== req.usuario.id) {
         return res.status(403).json({ error: 'Esta petición no está asignada a ti' });
       }
       if (p.rows[0].firmado_en) {
@@ -1055,7 +1082,7 @@ router.get('/:id/entrega/archivo', requerirRol(...TODOS), async (req, res) => {
 });
 
 // ---------- FIRMAR RECEPCIÓN (Administrador o Receptor, con contraseña) ----------
-router.post('/:id/firmar', requerirRol('Administrador', 'Receptor'), async (req, res) => {
+router.post('/:id/firmar', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
   const { id } = req.params;
   const { contrasena } = req.body;
 
@@ -1073,13 +1100,24 @@ router.post('/:id/firmar', requerirRol('Administrador', 'Receptor'), async (req,
 
     // 2) La petición debe existir, tener PDF cargado y no estar firmada
     const p = await pool.query(
-      `SELECT p.firmado_en, e.peticion_id AS tiene_pdf
+      `SELECT p.firmado_en, e.peticion_id AS tiene_pdf, ra.nom_rol AS rol_asignado
          FROM peticiones p
          LEFT JOIN entregas e ON e.peticion_id = p.id
+         LEFT JOIN usuarios ua ON ua.id = p.perito_id
+         LEFT JOIN roles ra ON ra.id = ua.rol_id
         WHERE p.id = $1`,
       [id]
     );
     if (!p.rows[0]) return res.status(404).json({ error: 'Petición no encontrada' });
+
+    // Lo de un policía lo firma el AIC; lo de un perito, el Receptor (el Administrador firma todo)
+    const esDePolicia = p.rows[0].rol_asignado === 'Policia';
+    if (req.usuario.rol === 'Receptor' && esDePolicia) {
+      return res.status(403).json({ error: 'Esta entrega la firma un AIC' });
+    }
+    if (req.usuario.rol === 'AIC' && !esDePolicia) {
+      return res.status(403).json({ error: 'Esta entrega la firma un receptor' });
+    }
     if (!p.rows[0].tiene_pdf) {
       return res.status(400).json({ error: 'El perito todavía no carga el PDF' });
     }

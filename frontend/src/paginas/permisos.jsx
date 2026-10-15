@@ -4,13 +4,17 @@ export const ROLES = {
   ADMIN: "Administrador",
   PERITO: "Perito",
   RECEPTOR: "Receptor",
+  AIC: "AIC",
+  POLICIA: "Policia",
   CONSULTA: "Consulta",
 };
 
-const { ADMIN, PERITO, RECEPTOR, CONSULTA } = ROLES;
+const { ADMIN, PERITO, RECEPTOR, AIC, POLICIA, CONSULTA } = ROLES;
 
 /*
   Roles permitidos por vista. Se usa en App.jsx: <ProtectedRoute roles={VISTAS.estadisticas}>
+
+  AIC hace lo mismo que Receptor; Policia hace lo mismo que Perito.
 
   inicio          -> Home
   notificaciones  -> Notificaciones, PeticionPerito
@@ -29,22 +33,22 @@ const { ADMIN, PERITO, RECEPTOR, CONSULTA } = ROLES;
 export const MP = "Ministerio Publico";
 
 export const VISTAS = {
-  inicio:         [ADMIN, PERITO, RECEPTOR, CONSULTA, MP],
-  notificaciones: [PERITO],
-  nuevoRegistro:  [ADMIN, RECEPTOR],
-  expedientes:    [ADMIN, RECEPTOR],
-  verPeticion:    [ADMIN, RECEPTOR, PERITO, CONSULTA],
+  inicio:         [ADMIN, PERITO, POLICIA, RECEPTOR, AIC, CONSULTA, MP],
+  notificaciones: [PERITO, POLICIA],
+  nuevoRegistro:  [ADMIN, RECEPTOR, AIC],
+  expedientes:    [ADMIN, RECEPTOR, AIC],
+  verPeticion:    [ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA],
   editarPeticion: [ADMIN],
-  carpetas:       [ADMIN, RECEPTOR],
+  carpetas:       [ADMIN, RECEPTOR, AIC],
   estadisticas:   [ADMIN, CONSULTA],
   usuarios:       [ADMIN],
   crearCuenta:    [ADMIN],
   bitacora:       [ADMIN],
-  porFirmar:      [ADMIN, RECEPTOR],
+  porFirmar:      [ADMIN, RECEPTOR, AIC],
   respaldo:       [ADMIN],
   solicitudMP:          [MP],
   misCarpetas:          [MP],
-  solicitudesRecibidas: [ADMIN, RECEPTOR],
+  solicitudesRecibidas: [ADMIN, RECEPTOR, AIC],
 };
 export function puedeVer(rol, vista) {
   if (!vista || !VISTAS[vista]) return true;

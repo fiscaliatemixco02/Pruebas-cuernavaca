@@ -112,8 +112,8 @@ export default function AppLayout({ title, children }) {
 
   // Qué items del menú llevan puntito rojo
 const conteo = useTrabajoPendiente();
-const esPerito = user?.rol === "Perito";
-const puedeFirmar = user?.rol === "Administrador" || user?.rol === "Receptor";
+const esPerito = user?.rol === "Perito" || user?.rol === "Policia";
+const puedeFirmar = ["Administrador", "Receptor", "AIC"].includes(user?.rol);
 
 // El punto se queda mientras haya trabajo pendiente
 const puntos = {

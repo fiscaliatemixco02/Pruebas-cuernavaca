@@ -6,7 +6,15 @@ import { peticionesApi } from "../api/peticiones";
 import { SelectField, TextField } from "../reutilizables/Field";
 import "./Auth.css";
 
-const ROLES = ["Administrador", "Receptor", "Perito", "Consulta", "Ministerio Publico"];
+  const ROLES = [
+    { value: "Administrador", label: "Administrador" },
+    { value: "Receptor", label: "Receptor" },
+    { value: "AIC", label: "AIC" },
+    { value: "Perito", label: "Perito" },
+    { value: "Policia", label: "Policía" },
+    { value: "Consulta", label: "Consulta" },
+    { value: "Ministerio Publico", label: "Ministerio Público" },
+  ];
 
 export default function CrearCuenta() {
   const navigate = useNavigate();

@@ -14,10 +14,12 @@ const PORT = process.env.PORT || 3000;
 // Nombres de rol: deben coincidir EXACTO con roles.nom_rol en la BD
 const ADMIN = 'Administrador';
 const RECEPTOR = 'Receptor';
+const AIC = 'AIC';
 const PERITO = 'Perito';
+const POLICIA = 'Policia';
 const CONSULTA = 'Consulta';
 const MP = 'Ministerio Publico';
-const TODOS = [ADMIN, RECEPTOR, PERITO, CONSULTA, MP];
+const TODOS = [ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA, MP];
 
 app.use(express.json());
 
@@ -61,9 +63,9 @@ app.get('/api/llamados', verificarToken, requerirRol(...TODOS), async (req, res)
   }
 });
 
-// Usuarios. Administrador y Receptor (el wizard necesita la lista para los selects).
+// Usuarios. Administrador, Receptor y AIC (el wizard necesita la lista para los selects).
 // Sin password_hash ni tokens.
-app.get('/api/usuarios', verificarToken, requerirRol(ADMIN, RECEPTOR), async (req, res) => {
+app.get('/api/usuarios', verificarToken, requerirRol(ADMIN, RECEPTOR, AIC), async (req, res) => {
   try {
     const resultado = await pool.query(
       `SELECT u.id, u.nombre, u.correo, u.rol_id, u.verificado, u.materia_id,
@@ -106,33 +108,46 @@ app.get('/api/materias', verificarToken, requerirRol(...TODOS), async (req, res)
   }
 });
 
-// Usuarios con rol de Perito. Con ?materia_id=X devuelve solo los de esa materia.
-app.get('/api/peritos', verificarToken, requerirRol(ADMIN, RECEPTOR), async (req, res) => {
+// Personas a las que se les puede asignar una petición.
+//   Receptor      -> solo peritos (con ?materia_id=X, solo los de esa materia)
+//   AIC           -> solo policías (no se filtran por materia)
+//   Administrador -> peritos (filtrados por materia si se manda) y todos los policías
+// Cada fila trae `rol` para poder distinguirlos en pantalla.
+app.get('/api/peritos', verificarToken, requerirRol(ADMIN, RECEPTOR, AIC), async (req, res) => {
   const { materia_id } = req.query;
-  const params = [PERITO];
-  let filtroMateria = '';
+  const rolSolicitante = req.usuario.rol;
+  const params = [];
+  const condiciones = [];
 
-  if (materia_id !== undefined && materia_id !== '') {
-    if (!/^\d+$/.test(String(materia_id))) {
-      return res.status(400).json({ error: 'Materia inválida' });
+  if (materia_id !== undefined && materia_id !== '' && !/^\d+$/.test(String(materia_id))) {
+    return res.status(400).json({ error: 'Materia inválida' });
+  }
+
+  if (rolSolicitante !== AIC) {
+    let cond = `r.nom_rol = '${PERITO}'`;
+    if (materia_id !== undefined && materia_id !== '') {
+      params.push(materia_id);
+      cond += ` AND u.materia_id = $${params.length}`;
     }
-    params.push(materia_id);
-    filtroMateria = `AND u.materia_id = $${params.length}`;
+    condiciones.push(`(${cond})`);
+  }
+  if (rolSolicitante !== RECEPTOR) {
+    condiciones.push(`r.nom_rol = '${POLICIA}'`);
   }
 
   try {
     const resultado = await pool.query(
-      `SELECT u.id, u.nombre, u.correo, u.materia_id
+      `SELECT u.id, u.nombre, u.correo, u.materia_id, r.nom_rol AS rol
          FROM usuarios u
          JOIN roles r ON r.id = u.rol_id
-        WHERE r.nom_rol = $1 ${filtroMateria}
+        WHERE ${condiciones.join(' OR ')}
         ORDER BY u.nombre`,
       params
     );
     res.json(resultado.rows);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Error al consultar peritos' });
+    res.status(500).json({ error: 'Error al consultar peritos y policías' });
   }
 });
 

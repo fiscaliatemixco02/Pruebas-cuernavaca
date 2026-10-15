@@ -7,7 +7,7 @@ const router = express.Router();
 // Todas las rutas exigen sesión
 router.use(verificarToken);
 
-const TODOS = ['Administrador', 'Receptor', 'Perito', 'Consulta'];
+const TODOS = ['Administrador', 'Receptor', 'AIC', 'Perito', 'Policia', 'Consulta'];
 
 // Catálogo de carpetas activas (todos los roles pueden verlo)
 router.get('/', requerirRol(...TODOS), async (req, res) => {
@@ -22,8 +22,8 @@ router.get('/', requerirRol(...TODOS), async (req, res) => {
   }
 });
 
-// Solicitudes de MP que llegaron con el número de esta carpeta (Administrador y Receptor)
-router.get('/:id/solicitudes', requerirRol('Administrador', 'Receptor'), async (req, res) => {
+// Solicitudes de MP que llegaron con el número de esta carpeta (Administrador, Receptor y AIC)
+router.get('/:id/solicitudes', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
   const { id } = req.params;
   if (!/^\d+$/.test(id)) {
     return res.status(400).json({ error: 'Id de carpeta inválido' });
