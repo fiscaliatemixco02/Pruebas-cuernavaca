@@ -587,6 +587,7 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
     descripcion_solicitud,
     numero_llamado,
     perito_id,
+    jefe_grupo,
   } = req.body;
 
   const receptor_id = req.usuario.id; // sale del token, no del body
@@ -637,8 +638,8 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
 
     const resultado = await pool.query(
       `INSERT INTO peticiones
-        (llamado_id, receptor_id, nombre_ministerio_publico, con_detenido, materia_id, numero_carpeta, descripcion_solicitud, numero_llamado, perito_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (llamado_id, receptor_id, nombre_ministerio_publico, con_detenido, materia_id, numero_carpeta, descripcion_solicitud, numero_llamado, perito_id, jefe_grupo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         llamado_id,
@@ -650,6 +651,7 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
         mayus(descripcion_solicitud),
         numero, // ya viene en mayúsculas
         peritoFinal,
+        mayus(jefe_grupo), // solo lo captura el AIC; null si viene vacío
       ]
     );
 
@@ -799,6 +801,8 @@ router.post(
   async (req, res) => {
     const { id } = req.params;
     const { tipo } = req.body;
+    // Reseña opcional que aplica a los PDF de este envío (máx. 500 caracteres)
+    const descripcion = String(req.body.descripcion || '').trim().slice(0, 500) || null;
     const archivos = req.files || [];
     const borrar = () => archivos.forEach((f) => fs.unlink(f.path, () => {}));
 
@@ -834,9 +838,9 @@ router.post(
       // Un registro por cada PDF (los anteriores se conservan)
       for (const f of archivos) {
         await client.query(
-          `INSERT INTO entrega_archivos (peticion_id, tipo, archivo_nombre, archivo_ruta, subido_por)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [id, tipo, f.originalname, f.path, req.usuario.id]
+          `INSERT INTO entrega_archivos (peticion_id, tipo, archivo_nombre, archivo_ruta, subido_por, descripcion)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [id, tipo, f.originalname, f.path, req.usuario.id, descripcion]
         );
       }
 
@@ -929,7 +933,7 @@ router.get('/:id/entrega/archivos', requerirRol(...TODOS), async (req, res) => {
   try {
     if (!(await accesoEntrega(req, res))) return;
     const r = await pool.query(
-      `SELECT id, tipo, archivo_nombre AS nombre_original, subido_en
+      `SELECT id, tipo, archivo_nombre AS nombre_original, subido_en, descripcion
          FROM entrega_archivos
         WHERE peticion_id = $1
         ORDER BY subido_en, id`,

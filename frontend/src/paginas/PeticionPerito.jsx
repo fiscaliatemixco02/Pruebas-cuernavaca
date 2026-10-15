@@ -23,6 +23,7 @@ export default function PeticionPerito() {
   const [pdfsCargados, setPdfsCargados] = useState([]);
   const [tipo, setTipo] = useState("");
   const [archivos, setArchivos] = useState([]);
+  const [descripcion, setDescripcion] = useState("");
 
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
@@ -82,6 +83,7 @@ export default function PeticionPerito() {
     const fd = new FormData();
     archivos.forEach((f) => fd.append("archivos", f)); // mismo nombre para todos
     fd.append("tipo", tipo);
+    if (descripcion.trim()) fd.append("descripcion", descripcion.trim());
 
     setSubiendo(true);
     try {
@@ -89,6 +91,7 @@ export default function PeticionPerito() {
       if (guardada?.tipo) setEntrega(guardada);
       setAviso(`${archivos.length} PDF(s) subido(s) correctamente.`);
       setArchivos([]);
+      setDescripcion("");
       e.target.reset?.();
       await cargarPdfs();
     } catch (err) {
@@ -216,6 +219,11 @@ export default function PeticionPerito() {
                         >
                           Eliminar
                         </button>
+                        {p.descripcion ? (
+                          <div className="field-hint" style={{ marginTop: 4 }}>
+                            Reseña: {p.descripcion}
+                          </div>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -238,6 +246,8 @@ export default function PeticionPerito() {
                 />
               </div>
 
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+                <div style={{ flex: "1 1 260px" }}>
               <div className="file-input-row">
                 <input
                   type="file"
@@ -252,6 +262,24 @@ export default function PeticionPerito() {
                 <span className="field-hint" style={{ margin: 0 }}>
                   Solo PDF, máximo 20 MB cada uno y hasta 10 por envío.
                 </span>
+              </div>
+                </div>
+
+                <div style={{ flex: "1 1 260px" }}>
+                  <label className="label" htmlFor="descripcion-entrega">
+                    Breve descripción o reseña (opcional)
+                  </label>
+                  <textarea
+                    id="descripcion-entrega"
+                    value={descripcion}
+                    onChange={(e) => setDescripcion(e.target.value.toUpperCase())}
+                    maxLength={500}
+                    rows={3}
+                    placeholder="Escribe una breve descripción de lo que subes"
+                    style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }}
+                  />
+                  <span className="field-hint">{descripcion.length}/500</span>
+                </div>
               </div>
 
               <ListaPdfsPendientes
