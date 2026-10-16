@@ -128,6 +128,83 @@ router.get('/', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
   }
 });
 
+// Carpetas del MP: una por número de carpeta de sus solicitudes
+// (con_resolucion = solicitudes cuya petición ya tiene PDF subidos por el perito/policía)
+router.get('/carpetas', requerirRol(MP), async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT UPPER(s.numero_carpeta) AS numero_carpeta,
+              COUNT(*)::int AS total_solicitudes,
+              COUNT(*) FILTER (
+                WHERE EXISTS (
+                  SELECT 1 FROM entrega_archivos ea WHERE ea.peticion_id = s.peticion_id
+                )
+              )::int AS con_resolucion
+         FROM solicitudes_mp s
+        WHERE s.mp_id = $1
+        GROUP BY UPPER(s.numero_carpeta)
+        ORDER BY UPPER(s.numero_carpeta)`,
+      [quien(req).id]
+    );
+    res.json(r.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al consultar las carpetas' });
+  }
+});
+
+// PDF de la resolución (los que subió el perito/policía a la petición ligada a la solicitud)
+router.get('/:id/resolucion', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+  try {
+    const sol = await solicitudAccesible(req, res);
+    if (!sol) return;
+    const r = await pool.query(
+      `SELECT ea.id, ea.tipo, ea.archivo_nombre AS nombre_original, ea.subido_en
+         FROM solicitudes_mp s
+         JOIN entrega_archivos ea ON ea.peticion_id = s.peticion_id
+        WHERE s.id = $1
+        ORDER BY ea.subido_en, ea.id`,
+      [sol.id]
+    );
+    res.json(r.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al consultar la resolución' });
+  }
+});
+
+// Ver un PDF concreto de la resolución
+router.get('/:id/resolucion/:archivoId', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.archivoId)) {
+      return res.status(400).json({ error: 'Id de archivo inválido' });
+    }
+    const sol = await solicitudAccesible(req, res);
+    if (!sol) return;
+    const r = await pool.query(
+      `SELECT ea.archivo_ruta
+         FROM solicitudes_mp s
+         JOIN entrega_archivos ea ON ea.peticion_id = s.peticion_id
+        WHERE s.id = $1 AND ea.id = $2`,
+      [sol.id, req.params.archivoId]
+    );
+    if (!r.rows[0]) return res.sendStatus(404);
+
+    const guardada = r.rows[0].archivo_ruta;
+    const ruta = path.isAbsolute(guardada)
+      ? guardada
+      : path.join(__dirname, '..', 'uploads', 'entregas', path.basename(guardada));
+    if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'Archivo no encontrado en disco' });
+
+    res.type('application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(path.resolve(ruta));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener el PDF de la resolución' });
+  }
+});
+
 // Lista de PDF de una solicitud
 router.get('/:id/pdfs', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
   try {
