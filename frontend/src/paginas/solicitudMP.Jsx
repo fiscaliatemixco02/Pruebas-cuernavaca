@@ -93,7 +93,7 @@ export default function SolicitudMP() {
               required
             />
             <SelectField
-              label="Solicitud de área"
+              label="Solicitud de area"
               placeholder="Selecciona..."
               options={materias.map((m) => ({ value: m.id, label: m.nombre }))}
               value={form.materia_id}
