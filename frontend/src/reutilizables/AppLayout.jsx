@@ -85,7 +85,7 @@ const ICONS = {
 const NAV_ITEMS = [
   { to: "/", label: "Inicio", icon: "inicio", end: true, vista: "inicio" },
   { to: "/peticiones/nueva", label: "Nuevo Registro", icon: "nuevo", vista: "nuevoRegistro" },
-  { to: "/solicitud-mp", label: "Solicitud MP", icon: "nuevo", vista: "solicitudMP" },
+  { to: "/solicitud-mp", label: "Solicitud Periciales", icon: "nuevo", vista: "solicitudMP" },
   { to: "/mis-carpetas", label: "Carpetas", icon: "expedientes", vista: "misCarpetas" },
   { to: "/usuarios", label: "Personal", icon: "personal", vista: "usuarios" },
   { to: "/peticiones/buscar", label: "Expedientes", icon: "expedientes", expandable: true, vista: "expedientes" },

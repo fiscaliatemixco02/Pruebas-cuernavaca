@@ -100,6 +100,25 @@ router.post('/', requerirRol(MP), (req, res) => {
       }
 
       await client.query('COMMIT');
+
+      // Avisa a quienes atienden solicitudes (si falla, no afecta el guardado)
+      try {
+        await pool.query(
+          `INSERT INTO notificaciones (us_id, pet_id, tipo, mensaje)
+           SELECT u.id, NULL, 'solicitud_mp', $1
+             FROM usuarios u
+             JOIN roles r ON r.id = u.rol_id
+            WHERE r.nom_rol = ANY($2) AND u.id <> $3`,
+          [
+            `Nueva solicitud del MP para la carpeta ${solicitud.numero_carpeta}`,
+            [RECEPTOR, AIC, ADMIN],
+            quien(req).id,
+          ]
+        );
+      } catch (e) {
+        console.error('No se pudo notificar la solicitud MP:', e.message);
+      }
+
       res.status(201).json({ ...solicitud, total_pdfs: archivos.length });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
