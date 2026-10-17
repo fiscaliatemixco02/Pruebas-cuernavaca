@@ -54,7 +54,7 @@ app.use('/api/respaldo', respaldoRoutes);
 app.get('/api/llamados', verificarToken, requerirRol(...TODOS), async (req, res) => {
   try {
     const resultado = await pool.query(
-      'SELECT id, codigo, es_automatico FROM llamados ORDER BY codigo'
+     "SELECT id, codigo, es_automatico FROM llamados WHERE codigo <> 'OI' ORDER BY codigo"
     );
     res.json(resultado.rows);
   } catch (error) {

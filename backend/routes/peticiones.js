@@ -578,7 +578,7 @@ router.get('/:id', requerirRol(...TODOS), async (req, res) => {
 // ---------- CREAR (Administrador y Receptor) ----------
 // El perito ya se asigna aquí, en el primer formulario.
 router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
-  const {
+  let {
     llamado_id,
     nombre_ministerio_publico,
     con_detenido,
@@ -593,6 +593,22 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
   const receptor_id = req.usuario.id; // sale del token, no del body
 
   try {
+    // El AIC no captura llamado, materia ni con/sin detenido: se usan los internos
+    // (se crean con OrdenesInvestigacion_paso2.sql)
+    if (req.usuario.rol === 'AIC' && !llamado_id) {
+      const ll = await pool.query("SELECT id FROM llamados WHERE codigo = 'OI'");
+      const mt = await pool.query("SELECT id FROM materias WHERE nombre = 'Investigación (AIC)'");
+      if (!ll.rows[0] || !mt.rows[0]) {
+        return res.status(500).json({
+          error: 'Falta ejecutar OrdenesInvestigacion_paso2.sql (llamado OI y materia interna).',
+        });
+      }
+      llamado_id = ll.rows[0].id;
+      materia_id = mt.rows[0].id;
+      con_detenido = false;
+      numero_llamado = undefined;
+    }
+
     const ll = await pool.query(
       'SELECT codigo, es_automatico FROM llamados WHERE id = $1',
       [llamado_id]

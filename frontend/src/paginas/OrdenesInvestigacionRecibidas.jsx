@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import AppLayout from "../reutilizables/AppLayout";
 import { ordenesInvestigacionApi } from "../api/ordenesInvestigacion";
 import BotonesPdfOrden from "../reutilizables/BotonesPdfOrden";
+import AtenderOrdenInvestigacion from "./AtenderOrdenInvestigacion";
 
 const nombreArea = (v) => (v === "POLICIAL" ? "Policial" : v === "ANALISIS" ? "Análisis" : v);
 
 export default function OrdenesInvestigacionRecibidas() {
   const [lista, setLista] = useState([]);
   const [pdfsPorOrden, setPdfsPorOrden] = useState({});
+  const [activa, setActiva] = useState(null);
   const [error, setError] = useState("");
 
   const cargar = async () => {
@@ -33,14 +35,19 @@ export default function OrdenesInvestigacionRecibidas() {
   const verPdf = (ordenId, archivoId) =>
     ordenesInvestigacionApi.abrirPdf(ordenId, archivoId).catch((e) => setError(e.message));
 
-  async function atender(id) {
-    setError("");
-    try {
-      await ordenesInvestigacionApi.atender(id);
-      cargar();
-    } catch (e) {
-      setError(e.message);
-    }
+  if (activa) {
+    return (
+      <AppLayout title="Atender orden de investigación">
+        <AtenderOrdenInvestigacion
+          orden={activa}
+          onVolver={() => setActiva(null)}
+          onAtendida={() => {
+            setActiva(null);
+            cargar();
+          }}
+        />
+      </AppLayout>
+    );
   }
 
   return (
@@ -62,13 +69,11 @@ export default function OrdenesInvestigacionRecibidas() {
                 <td>{o.numero_carpeta}</td>
                 <td>{nombreArea(o.area)}</td>
                 <td>{o.breve_resena}</td>
-                <td>{o.estado === "ATENDIDA" ? `Atendida${o.nombre_aic ? ` (${o.nombre_aic})` : ""}` : "Pendiente"}</td>
+                <td>{o.estado === "ATENDIDA" ? `Atendida (${o.numero_llamado ?? ""})` : "Pendiente"}</td>
                 <td><BotonesPdfOrden ordenId={o.id} pdfs={pdfsPorOrden[o.id]} onVer={verPdf} /></td>
                 <td>
                   {o.estado === "PENDIENTE" && (
-                    <button className="btn btn-primary" onClick={() => atender(o.id)}>
-                      Marcar atendida
-                    </button>
+                    <button className="btn btn-primary" onClick={() => setActiva(o)}>Atender</button>
                   )}
                 </td>
               </tr>

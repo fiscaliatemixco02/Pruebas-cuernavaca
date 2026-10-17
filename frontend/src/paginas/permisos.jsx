@@ -35,7 +35,7 @@ export const MP = "Ministerio Publico";
 export const VISTAS = {
   inicio:         [ADMIN, PERITO, POLICIA, RECEPTOR, AIC, CONSULTA, MP],
   notificaciones: [PERITO, POLICIA],
-  nuevoRegistro:  [ADMIN, RECEPTOR, AIC],
+  nuevoRegistro:  [ADMIN, RECEPTOR],
   expedientes:    [ADMIN, RECEPTOR, AIC],
   verPeticion:    [ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA],
   editarPeticion: [ADMIN],
@@ -50,7 +50,7 @@ export const VISTAS = {
   misCarpetas:          [MP],
   solicitudesRecibidas: [ADMIN, RECEPTOR, AIC],
   ordenInvestigacion:   [MP],
-  ordenesRecibidas:     [ADMIN, AIC],
+  ordenesRecibidas:     [AIC],
 };
 export function puedeVer(rol, vista) {
   if (!vista || !VISTAS[vista]) return true;

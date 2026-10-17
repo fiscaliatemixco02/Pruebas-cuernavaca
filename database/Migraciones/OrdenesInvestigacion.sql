@@ -32,3 +32,28 @@ SELECT o.*, u.nombre AS nombre_mp, a.nombre AS nombre_aic
 FROM ordenes_investigacion o
 JOIN usuarios u ON u.id = o.mp_id
 LEFT JOIN usuarios a ON a.id = o.atendida_por;
+
+
+ALTER TABLE ordenes_investigacion
+    ADD COLUMN IF NOT EXISTS peticion_id BIGINT REFERENCES peticiones(id);
+
+INSERT INTO llamados (codigo, es_automatico)
+VALUES ('OI', TRUE)
+ON CONFLICT (codigo) DO NOTHING;
+
+INSERT INTO materias (nombre, activo)
+VALUES ('Investigación (AIC)', FALSE)
+ON CONFLICT (nombre) DO NOTHING;
+
+DROP VIEW IF EXISTS vw_ordenes_investigacion;
+
+CREATE VIEW vw_ordenes_investigacion AS
+SELECT
+    o.*,
+    u.nombre AS nombre_mp,
+    a.nombre AS nombre_aic,
+    p.numero_llamado
+FROM ordenes_investigacion o
+JOIN usuarios u ON u.id = o.mp_id
+LEFT JOIN usuarios a ON a.id = o.atendida_por
+LEFT JOIN peticiones p ON p.id = o.peticion_id;
