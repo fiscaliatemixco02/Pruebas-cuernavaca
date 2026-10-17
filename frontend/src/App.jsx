@@ -1,3 +1,6 @@
+import OrdenInvestigacion from "./paginas/OrdenInvestigacion";
+import OrdenesInvestigacionRecibidas from "./paginas/OrdenesInvestigacionRecibidas";
+
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./reutilizables/ProtectedRoute";
@@ -20,6 +23,7 @@ import Respaldo from "./paginas/Respaldo";
 import SolicitudMP from "./paginas/SolicitudMP";
 import CarpetasMP from "./paginas/CarpetasMP";
 import SolicitudesRecibidas from "./paginas/SolicitudesRecibidas";
+
 
 export default function App() {
   return (
@@ -84,7 +88,7 @@ export default function App() {
           element={<ProtectedRoute roles={VISTAS.respaldo}><Respaldo /></ProtectedRoute>}
         />
 
-        {/* Ministerio Público */}
+                {/* Ministerio Público */}
         <Route
           path="/solicitud-mp"
           element={<ProtectedRoute roles={VISTAS.solicitudMP}><SolicitudMP /></ProtectedRoute>}
@@ -94,10 +98,17 @@ export default function App() {
           element={<ProtectedRoute roles={VISTAS.misCarpetas}><CarpetasMP /></ProtectedRoute>}
         />
         <Route
+          path="/orden-investigacion"
+          element={<ProtectedRoute roles={VISTAS.ordenInvestigacion}><OrdenInvestigacion /></ProtectedRoute>}
+        />
+        <Route
+          path="/ordenes-recibidas"
+          element={<ProtectedRoute roles={VISTAS.ordenesRecibidas}><OrdenesInvestigacionRecibidas /></ProtectedRoute>}
+        />
+        <Route
           path="/solicitudes-recibidas"
           element={<ProtectedRoute roles={VISTAS.solicitudesRecibidas}><SolicitudesRecibidas /></ProtectedRoute>}
         />
-
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>

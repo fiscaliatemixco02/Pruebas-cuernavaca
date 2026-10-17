@@ -7,6 +7,7 @@ const cors = require('cors');
 const carpetasRoutes = require('./routes/carpetas');
 const peticionesRoutes = require('./routes/peticiones');
 const solicitudesMpRoutes = require('./routes/solicitudesMp');
+const ordenesInvestigacionRoutes = require('./routes/ordenesInvestigacion');
 const { verificarToken, requerirRol } = require('./middleware/auth');
 const respaldoRoutes = require('./routes/respaldo');
 const app = express();
@@ -22,7 +23,6 @@ const MP = 'Ministerio Publico';
 const TODOS = [ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA, MP];
 
 app.use(express.json());
-
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
@@ -178,3 +178,8 @@ app.get('/api/bitacora', verificarToken, requerirRol(ADMIN), async (req, res) =>
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
+app.use('/api/solicitudes-mp', verificarToken, solicitudesMpRoutes);
+
+app.use('/api/ordenes-investigacion', verificarToken, ordenesInvestigacionRoutes);   // <-- debe estar
+
+app.use('/api/notificaciones', require('./routes/notificaciones'));

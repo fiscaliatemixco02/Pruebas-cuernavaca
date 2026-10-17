@@ -98,6 +98,8 @@ const NAV_ITEMS = [
   { to: "/crear-cuenta", label: "Crear cuenta", icon: "crearCuenta", vista: "crearCuenta" },
   { to: "/carpetas", label: "Carpetas", icon: "expedientes", vista: "carpetas" },
   { to: "/respaldo", label: "Respaldo", icon: "expedientes", vista: "respaldo" },
+  { to: "/orden-investigacion", label: "Orden de Investigación (AIC)", icon: "nuevo", vista: "ordenInvestigacion" },
+  { to: "/ordenes-recibidas", label: "Órdenes de Investigación", icon: "expedientes", vista: "ordenesRecibidas" },
 ];
 
 export default function AppLayout({ title, children }) {
@@ -121,15 +123,18 @@ const puntos = {
   porFirmar: puedeFirmar && conteo.por_firmar > 0,
   // Solicitudes nuevas de MP sin revisar (Administrador y Receptor)
   solicitudesRecibidas: puedeFirmar && pendientes.some((n) => n.tipo === "solicitud_mp"),
+  ordenesRecibidas: user?.rol === "AIC" && pendientes.some((n) => n.tipo === "orden_aic"),
 };
 
 
   // Al entrar a la pantalla, se marcan como leídas y el punto se apaga
   useEffect(() => {
     const tipo =
+      pathname === "/ordenes-recibidas" ? "orden_aic" :
       pathname === "/por-firmar" ? "lista_firma" :
       pathname === "/solicitudes-recibidas" ? "solicitud_mp" :
       pathname === "/notificaciones" ? "asignada" : null;
+      
     if (!tipo) return;
 
     const sinLeer = pendientes.filter((n) => n.tipo === tipo);
