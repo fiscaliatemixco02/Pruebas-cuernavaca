@@ -61,6 +61,10 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
       ? "Asignar perito / policía"
       : "Asignar perito";
 
+  // El AIC, al crear un registro, no captura llamado, materia ni con/sin detenido
+  // (el backend usa el llamado y la materia internos de órdenes de investigación)
+  const ocultarCamposAIC = esAIC && !esEdicion && !solicitudMp;
+
   const peticionId = initialData?.id ?? null;
 
   const [meta] = useState({
@@ -201,6 +205,17 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
   }
 
   function validar() {
+    if (ocultarCamposAIC) {
+      if (
+        !form.receptor_id ||
+        !form.nombre_ministerio_publico ||
+        !form.numero_carpeta ||
+        !form.descripcion_solicitud
+      ) {
+        return "Receptor, nombre del MP, número de carpeta y descripción son obligatorios.";
+      }
+      return "";
+    }
     if (
       !form.llamado_id ||
       !form.receptor_id ||
@@ -243,12 +258,12 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
     setLoading(true);
     try {
       const creada = await peticionesApi.crear({
-        llamado_id: form.llamado_id,
-        numero_llamado: requiereNumeroManual ? numeroManual : undefined,
+        llamado_id: ocultarCamposAIC ? undefined : form.llamado_id,
+        numero_llamado: !ocultarCamposAIC && requiereNumeroManual ? numeroManual : undefined,
         receptor_id: user.id, // siempre el usuario logueado
         nombre_ministerio_publico: form.nombre_ministerio_publico,
-        con_detenido: form.con_detenido,
-        materia_id: form.materia_id,
+        con_detenido: ocultarCamposAIC ? false : form.con_detenido,
+        materia_id: ocultarCamposAIC ? undefined : form.materia_id,
         numero_carpeta: form.numero_carpeta, // si no existe, el backend la crea
         descripcion_solicitud: form.descripcion_solicitud,
         perito_id: form.perito_id || null,
@@ -437,6 +452,8 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
 
         <div className="form-grid">
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {!ocultarCamposAIC && (
+              <>
             <SelectField
               label="Llamado"
               options={opcionesLlamados}
@@ -483,6 +500,8 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
                 required
               />
             )}
+              </>
+            )}
 
             {/* Solo el usuario logueado (receptor/AIC/administrador), bloqueado */}
             <SelectField
@@ -502,6 +521,8 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
               style={solicitudMp ? { cursor: "not-allowed" } : undefined}
               required
             />
+            {!ocultarCamposAIC && (
+              <>
             <RadioGroup
               name="con_detenido"
               value={form.con_detenido}
@@ -520,6 +541,8 @@ export default function PeticionWizard({ mode = "nueva", initialData = null, sol
               disabled={!form.llamado_id}
               required
             />
+              </>
+            )}
             {campoCarpeta}
             {selectPerito}
           </div>

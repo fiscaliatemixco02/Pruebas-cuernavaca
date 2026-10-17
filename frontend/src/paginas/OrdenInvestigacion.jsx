@@ -11,6 +11,9 @@ const AREAS = [
 ];
 const nombreArea = (v) => AREAS.find((a) => a.value === v)?.label ?? v;
 
+// 5 letras + 3 números + "/" + año (ej. ABCDE001/2026)
+const FORMATO_CARPETA = /^[A-Z]{5}\d{3}\/\d{4}$/;
+
 const vacio = { numero_carpeta: "", area: "", breve_resena: "" };
 
 export default function OrdenInvestigacion() {
@@ -55,6 +58,9 @@ export default function OrdenInvestigacion() {
     if (!form.numero_carpeta || !form.area || !form.breve_resena) {
       return setError("Todos los campos son obligatorios.");
     }
+    if (!FORMATO_CARPETA.test(form.numero_carpeta)) {
+      return setError("La carpeta debe tener 5 letras, 3 números y el año. Ejemplo: ABCDE001/2026");
+    }
     if (pdfs.length === 0) return setError("Debes adjuntar al menos un PDF.");
     if (pdfs.some((f) => f.type !== "application/pdf")) {
       return setError("Todos los archivos deben ser PDF.");
@@ -90,7 +96,11 @@ export default function OrdenInvestigacion() {
             <TextField
               label="Número de carpeta"
               value={form.numero_carpeta}
-              onChange={(e) => set("numero_carpeta", e.target.value.toUpperCase())}
+              onChange={(e) => set("numero_carpeta", e.target.value.toUpperCase().replace(/\s/g, ""))}
+              placeholder="ABCDE001/2026"
+              hint="5 letras, 3 números y el año. Ejemplo: ABCDE001/2026"
+              maxLength={13}
+              autoComplete="off"
               required
             />
             <SelectField
