@@ -101,7 +101,7 @@ export default function NotificacionesBell({ icono }) {
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
       notificacionesApi.marcarLeida(n.id).catch(() => {});
     }
-    if (n.tipo === "solicitud_mp") navigate("/carpetas");
+    if (n.tipo === "solicitud_mp") navigate("/solicitudes-recibidas");
     else navigate(n.tipo === "lista_firma" ? "/por-firmar" : `/peticiones/editar/${n.pet_id}`);
   }
 
