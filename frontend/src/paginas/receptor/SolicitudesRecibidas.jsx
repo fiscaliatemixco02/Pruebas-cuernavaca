@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { solicitudesMpApi } from "../api/solicitudesMp";
-import PeticionWizard from "./PeticionWizard";
+import AppLayout from "../../reutilizables/AppLayout";
+import { solicitudesMpApi } from "../../api/solicitudesMp";
+import PeticionWizard from "../compartidas/PeticionWizard";
 
 /* Botones "Ver" de los PDF de una solicitud (uno por archivo).
    Si la solicitud es antigua y no tiene lista de archivos, abre el primero. */

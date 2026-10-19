@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
-import AppLayout from "../reutilizables/AppLayout";
-import { useAuth } from "../context/AuthContext";
+import AppLayout from "../../reutilizables/AppLayout";
+import { useAuth } from "../../context/AuthContext";
 import "./Home.css";
 
 export default function Home() {

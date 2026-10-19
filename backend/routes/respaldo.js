@@ -16,6 +16,8 @@ router.use(verificarToken);
 const DIR_ENTREGAS = path.join(__dirname, '..', 'uploads', 'entregas');
 // Misma carpeta donde routes/solicitudesMp.js guarda los oficios de solicitud
 const DIR_SOLICITUDES = path.join(__dirname, '..', 'uploads', 'solicitudes');
+// Misma carpeta donde routes/ordenesInvestigacion.js guarda los oficios de las órdenes
+const DIR_ORDENES = path.join(__dirname, '..', 'uploads', 'ordenes-investigacion');
 
 // ---------- RESPALDO COMPLETO (.zip): datos de todas las tablas + PDF ----------
 router.get('/', requerirRol('Administrador'), async (req, res) => {
@@ -51,6 +53,7 @@ router.get('/', requerirRol('Administrador'), async (req, res) => {
 
     const hayEntregas = fs.existsSync(DIR_ENTREGAS);
     const haySolicitudes = fs.existsSync(DIR_SOLICITUDES);
+    const hayOrdenes = fs.existsSync(DIR_ORDENES);
 
     const leeme = [
       'RESPALDO DEL SISTEMA',
@@ -61,6 +64,7 @@ router.get('/', requerirRol('Administrador'), async (req, res) => {
       '  base_de_datos/  Un archivo .json por cada tabla, con todos sus registros.',
       '  entregas/       PDF cargados por los peritos (carpeta uploads/entregas).',
       '  solicitudes/    Oficios PDF de las solicitudes del Ministerio Público (carpeta uploads/solicitudes).',
+      '  ordenes-investigacion/  Oficios PDF de las órdenes de investigación (carpeta uploads/ordenes-investigacion).',
       '',
       'Tablas respaldadas:',
       ...tablas.map((x) => `  ${x.nombre}: ${x.filas.length} registros`),
@@ -80,6 +84,7 @@ router.get('/', requerirRol('Administrador'), async (req, res) => {
     }
     if (hayEntregas) zip.directory(DIR_ENTREGAS, 'entregas');
     if (haySolicitudes) zip.directory(DIR_SOLICITUDES, 'solicitudes');
+    if (hayOrdenes) zip.directory(DIR_ORDENES, 'ordenes-investigacion');
 
     await zip.finalize();
   } catch (error) {

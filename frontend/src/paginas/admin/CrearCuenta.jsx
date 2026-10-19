@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import AppLayout from "../reutilizables/AppLayout";
-import { authApi } from "../api/auth";
-import { peticionesApi } from "../api/peticiones";
-import { SelectField, TextField } from "../reutilizables/Field";
-import "./Auth.css";
+import AppLayout from "../../reutilizables/AppLayout";
+import { authApi } from "../../api/auth";
+import { peticionesApi } from "../../api/peticiones";
+import { SelectField, TextField } from "../../reutilizables/Field";
+import "../auth/Auth.css";
 
   const ROLES = [
     { value: "Administrador", label: "Administrador" },

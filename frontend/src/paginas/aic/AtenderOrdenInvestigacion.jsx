@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { ordenesInvestigacionApi } from "../api/ordenesInvestigacion";
-import { peticionesApi } from "../api/peticiones";
-import { useAuth } from "../context/AuthContext";
-import { SelectField, TextArea, TextField } from "../reutilizables/Field";
+import { ordenesInvestigacionApi } from "../../api/ordenesInvestigacion";
+import { peticionesApi } from "../../api/peticiones";
+import { useAuth } from "../../context/AuthContext";
+import { SelectField, TextArea, TextField } from "../../reutilizables/Field";
 import "./AtenderOrden.css";
 
 const nombreCompleto = (u) => [u?.nombre, u?.apellidos].filter(Boolean).join(" ");

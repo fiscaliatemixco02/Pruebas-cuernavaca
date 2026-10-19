@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth, iniciales } from "../context/AuthContext";
-import { puedeVer } from "../paginas/permisos";
+import { puedeVer } from "../config/permisos";
 import usePendientes from "../reutilizables/usePendientes";
 import useTrabajoPendiente from "../reutilizables/useTrabajoPendiente";
 import { notificacionesApi } from "../api/notificaciones";

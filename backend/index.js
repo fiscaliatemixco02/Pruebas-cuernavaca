@@ -9,20 +9,15 @@ const peticionesRoutes = require('./routes/peticiones');
 const solicitudesMpRoutes = require('./routes/solicitudesMp');
 const ordenesInvestigacionRoutes = require('./routes/ordenesInvestigacion');
 const { verificarToken, requerirRol } = require('./middleware/auth');
+const { ROLES, PERMISOS } = require('./config/roles');
 const respaldoRoutes = require('./routes/respaldo');
 const app = express();
 const PORT = process.env.PORT || 3000;
-// Nombres de rol: deben coincidir EXACTO con roles.nom_rol en la BD
-const ADMIN = 'Administrador';
-const RECEPTOR = 'Receptor';
-const AIC = 'AIC';
-const PERITO = 'Perito';
-const POLICIA = 'Policia';
-const CONSULTA = 'Consulta';
-const MP = 'Ministerio Publico';
-const TODOS = [ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA, MP];
+// Los nombres de rol y los permisos viven en config/roles.js
+const { RECEPTOR, AIC, PERITO, POLICIA } = ROLES;
 
 app.use(express.json());
+
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
@@ -35,7 +30,7 @@ app.get('/', (req, res) => {
 // Login y registro (los permisos de cada endpoint se definen en routes/auth.js)
 app.use('/api/auth', authRoutes);
 
-app.use('/api/estadisticas', verificarToken, requerirRol(ADMIN, CONSULTA), estadisticasRoutes);
+app.use('/api/estadisticas', verificarToken, requerirRol(...PERMISOS.estadisticas), estadisticasRoutes);
 
 // Los roles de cada endpoint se definen dentro de routes/carpetas.js y routes/peticiones.js
 // (incluye /api/peticiones/asignadas, que vive en routes/peticiones.js)
@@ -45,16 +40,20 @@ app.use('/api/peticiones', verificarToken, peticionesRoutes);
 // Solicitudes del Ministerio Público (roles definidos dentro de routes/solicitudesMp.js)
 app.use('/api/solicitudes-mp', verificarToken, solicitudesMpRoutes);
 
+// Órdenes de investigación del MP hacia el AIC (roles definidos dentro de routes/ordenesInvestigacion.js)
+app.use('/api/ordenes-investigacion', verificarToken, ordenesInvestigacionRoutes);
+
 app.use('/api/notificaciones', require('./routes/notificaciones'));
 
 // Respaldo completo (el rol Administrador se exige dentro de routes/respaldo.js)
 app.use('/api/respaldo', respaldoRoutes);
 
 // Catálogo de tipos de llamado (AGREGADO NUEVAMENTE)
-app.get('/api/llamados', verificarToken, requerirRol(...TODOS), async (req, res) => {
+app.get('/api/llamados', verificarToken, requerirRol(...PERMISOS.verCatalogos), async (req, res) => {
   try {
     const resultado = await pool.query(
-     "SELECT id, codigo, es_automatico FROM llamados WHERE codigo <> 'OI' ORDER BY codigo"
+      // 'OI' es el llamado interno de las órdenes de investigación: no se ofrece en los formularios
+      "SELECT id, codigo, es_automatico FROM llamados WHERE codigo <> 'OI' ORDER BY codigo"
     );
     res.json(resultado.rows);
   } catch (error) {
@@ -65,7 +64,7 @@ app.get('/api/llamados', verificarToken, requerirRol(...TODOS), async (req, res)
 
 // Usuarios. Administrador, Receptor y AIC (el wizard necesita la lista para los selects).
 // Sin password_hash ni tokens.
-app.get('/api/usuarios', verificarToken, requerirRol(ADMIN, RECEPTOR, AIC), async (req, res) => {
+app.get('/api/usuarios', verificarToken, requerirRol(...PERMISOS.verUsuarios), async (req, res) => {
   try {
     const resultado = await pool.query(
       `SELECT u.id, u.nombre, u.correo, u.rol_id, u.verificado, u.materia_id,
@@ -84,7 +83,7 @@ app.get('/api/usuarios', verificarToken, requerirRol(ADMIN, RECEPTOR, AIC), asyn
 
 // Catálogo de materias. Con ?llamado_id=X devuelve solo las de ese llamado
 // (si el llamado no tiene materias configuradas, devuelve todas).
-app.get('/api/materias', verificarToken, requerirRol(...TODOS), async (req, res) => {
+app.get('/api/materias', verificarToken, requerirRol(...PERMISOS.verCatalogos), async (req, res) => {
   const { llamado_id } = req.query;
   try {
     if (llamado_id && /^\d+$/.test(llamado_id)) {
@@ -113,7 +112,7 @@ app.get('/api/materias', verificarToken, requerirRol(...TODOS), async (req, res)
 //   AIC           -> solo policías (no se filtran por materia)
 //   Administrador -> peritos (filtrados por materia si se manda) y todos los policías
 // Cada fila trae `rol` para poder distinguirlos en pantalla.
-app.get('/api/peritos', verificarToken, requerirRol(ADMIN, RECEPTOR, AIC), async (req, res) => {
+app.get('/api/peritos', verificarToken, requerirRol(...PERMISOS.verAsignables), async (req, res) => {
   const { materia_id } = req.query;
   const rolSolicitante = req.usuario.rol;
   const params = [];
@@ -152,7 +151,7 @@ app.get('/api/peritos', verificarToken, requerirRol(ADMIN, RECEPTOR, AIC), async
 });
 
 // Bitácora de acciones (solo administrador)
-app.get('/api/bitacora', verificarToken, requerirRol(ADMIN), async (req, res) => {
+app.get('/api/bitacora', verificarToken, requerirRol(...PERMISOS.administrar), async (req, res) => {
   try {
     const resultado = await pool.query(
       `SELECT
@@ -178,8 +177,3 @@ app.get('/api/bitacora', verificarToken, requerirRol(ADMIN), async (req, res) =>
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
-app.use('/api/solicitudes-mp', verificarToken, solicitudesMpRoutes);
-
-app.use('/api/ordenes-investigacion', verificarToken, ordenesInvestigacionRoutes);   // <-- debe estar
-
-app.use('/api/notificaciones', require('./routes/notificaciones'));

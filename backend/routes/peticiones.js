@@ -10,19 +10,14 @@ const { verificarToken, requerirRol } = require('../middleware/auth');
 const router = express.Router();
 router.use(verificarToken);
 
-const TODOS = ['Administrador', 'Receptor', 'AIC', 'Perito', 'Policia', 'Consulta', 'Ministerio publico'];
-
-// Roles que reciben peticiones asignadas y suben entregas
-const ROLES_ASIGNADOS = ['Perito', 'Policia'];
-const esAsignado = (rol) => ROLES_ASIGNADOS.includes(rol);
-
-// Qué tipo de asignado le corresponde a cada quien (null = todos)
-//   Receptor -> peritos, AIC -> policías, Administrador -> todos
-function rolAsignadoPara(rol) {
-  if (rol === 'Receptor') return 'Perito';
-  if (rol === 'AIC') return 'Policia';
-  return null;
-}
+const {
+  ROLES,
+  RECEPTORES,
+  PERMISOS,
+  esAsignado,
+  rolAsignadoPara,
+} = require('../config/roles');
+const { ADMIN, RECEPTOR, AIC, PERITO, POLICIA } = ROLES;
 
 // Valida a quién se asigna la petición. Devuelve un mensaje de error o null si todo está bien.
 //   - Receptor solo asigna peritos (de la materia de la petición)
@@ -38,9 +33,9 @@ async function validarAsignado(asignadoId, materiaId, rolActor) {
   );
   const u = r.rows[0];
   if (!u || !esAsignado(u.rol)) return 'La persona seleccionada no es un perito ni un policía';
-  if (rolActor === 'Receptor' && u.rol !== 'Perito') return 'Un receptor solo puede asignar peritos';
-  if (rolActor === 'AIC' && u.rol !== 'Policia') return 'Un AIC solo puede asignar policías';
-  if (u.rol === 'Perito' && String(u.materia_id) !== String(materiaId)) {
+  if (rolActor === RECEPTOR && u.rol !== PERITO) return 'Un receptor solo puede asignar peritos';
+  if (rolActor === AIC && u.rol !== POLICIA) return 'Un AIC solo puede asignar policías';
+  if (u.rol === PERITO && String(u.materia_id) !== String(materiaId)) {
     return 'El perito seleccionado no corresponde a la materia';
   }
   return null;
@@ -154,7 +149,7 @@ async function notificarRoles(roles, excluirId, petId, tipo, mensaje) {
 // =====================================================================
 
 // ---------- ASIGNADAS AL USUARIO LOGUEADO ----------
-router.get('/asignadas', requerirRol('Administrador', 'Perito', 'Policia'), async (req, res) => {
+router.get('/asignadas', requerirRol(...PERMISOS.misAsignadas), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT v.*, e.tipo AS entrega_tipo
@@ -172,7 +167,7 @@ router.get('/asignadas', requerirRol('Administrador', 'Perito', 'Policia'), asyn
 });
 
 // ---------- LLAMADOS LISTOS PARA FIRMAR (PDF cargado, sin firma) ----------
-router.get('/por-firmar', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
+router.get('/por-firmar', requerirRol(...PERMISOS.firmar), async (req, res) => {
   try {
     // Receptor ve lo de peritos, AIC lo de policías, Administrador todo
     const r = await pool.query(
@@ -194,7 +189,7 @@ router.get('/por-firmar', requerirRol('Administrador', 'Receptor', 'AIC'), async
 });
 
 // ---------- CONTEO PARA EL PUNTITO DEL MENÚ ----------
-router.get('/pendientes', requerirRol('Administrador', 'Receptor', 'AIC', 'Perito', 'Policia'), async (req, res) => {
+router.get('/pendientes', requerirRol(...PERMISOS.verPendientes), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT
@@ -219,7 +214,7 @@ router.get('/pendientes', requerirRol('Administrador', 'Receptor', 'AIC', 'Perit
 });
 
 // ---------- REPORTE MENSUAL EN PDF (debe ir ANTES de /:id) ----------
-router.get('/reporte-mensual', requerirRol('Administrador', 'Receptor', 'AIC', 'Consulta'), async (req, res) => {
+router.get('/reporte-mensual', requerirRol(...PERMISOS.reporteMensual), async (req, res) => {
   const mes = parseInt(req.query.mes, 10);
   const anio = parseInt(req.query.anio, 10);
   if (!(mes >= 1 && mes <= 12) || !(anio >= 2000 && anio <= 2100)) {
@@ -331,7 +326,7 @@ router.get('/reporte-mensual', requerirRol('Administrador', 'Receptor', 'AIC', '
 // ---------- REPORTE ESTADÍSTICO ANUAL EN PDF (debe ir ANTES de /:id) ----------
 // Solicitados: peticiones recibidas en el mes.
 // Realizados: entregas (PDF del perito) cargadas en el mes.
-router.get('/reporte-estadistico', requerirRol('Administrador', 'Consulta'), async (req, res) => {
+router.get('/reporte-estadistico', requerirRol(...PERMISOS.reporteEstadistico), async (req, res) => {
   const anio = req.query.anio ? parseInt(req.query.anio, 10) : new Date().getFullYear();
   if (!(anio >= 2000 && anio <= 2100)) {
     return res.status(400).json({ error: 'Año inválido' });
@@ -510,7 +505,7 @@ router.get('/reporte-estadistico', requerirRol('Administrador', 'Consulta'), asy
 });
 
 // ---------- LISTA (el perito solo ve las suyas) ----------
-router.get('/', requerirRol(...TODOS), async (req, res) => {
+router.get('/', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
   const { numero_llamado, perito, fecha, numero_carpeta } = req.query;
   const condiciones = [];
   const params = [];
@@ -556,7 +551,7 @@ router.get('/', requerirRol(...TODOS), async (req, res) => {
 // =====================================================================
 
 // ---------- UNA petición (el perito solo si es suya) ----------
-router.get('/:id', requerirRol(...TODOS), async (req, res) => {
+router.get('/:id', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Id de petición inválido' });
 
@@ -577,7 +572,7 @@ router.get('/:id', requerirRol(...TODOS), async (req, res) => {
 
 // ---------- CREAR (Administrador y Receptor) ----------
 // El perito ya se asigna aquí, en el primer formulario.
-router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
+router.post('/', requerirRol(...PERMISOS.registrar), async (req, res) => {
   let {
     llamado_id,
     nombre_ministerio_publico,
@@ -587,24 +582,23 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
     descripcion_solicitud,
     numero_llamado,
     perito_id,
-    jefe_grupo,
   } = req.body;
 
   const receptor_id = req.usuario.id; // sale del token, no del body
 
   try {
     // El AIC no captura llamado, materia ni con/sin detenido: se usan los internos
-    // (se crean con OrdenesInvestigacion_paso2.sql)
-    if (req.usuario.rol === 'AIC' && !llamado_id) {
-      const ll = await pool.query("SELECT id FROM llamados WHERE codigo = 'OI'");
-      const mt = await pool.query("SELECT id FROM materias WHERE nombre = 'Investigación (AIC)'");
-      if (!ll.rows[0] || !mt.rows[0]) {
+    // (se crean con el SQL de OrdenesInvestigacion: llamado 'OI' y materia 'Investigación (AIC)')
+    if (req.usuario.rol === AIC && !llamado_id) {
+      const llInterno = await pool.query("SELECT id FROM llamados WHERE codigo = 'OI'");
+      const mtInterna = await pool.query("SELECT id FROM materias WHERE nombre = 'Investigación (AIC)'");
+      if (!llInterno.rows[0] || !mtInterna.rows[0]) {
         return res.status(500).json({
-          error: 'Falta ejecutar OrdenesInvestigacion_paso2.sql (llamado OI y materia interna).',
+          error: 'Falta ejecutar el SQL de OrdenesInvestigacion (llamado OI y materia interna).',
         });
       }
-      llamado_id = ll.rows[0].id;
-      materia_id = mt.rows[0].id;
+      llamado_id = llInterno.rows[0].id;
+      materia_id = mtInterna.rows[0].id;
       con_detenido = false;
       numero_llamado = undefined;
     }
@@ -654,8 +648,8 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
 
     const resultado = await pool.query(
       `INSERT INTO peticiones
-        (llamado_id, receptor_id, nombre_ministerio_publico, con_detenido, materia_id, numero_carpeta, descripcion_solicitud, numero_llamado, perito_id, jefe_grupo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (llamado_id, receptor_id, nombre_ministerio_publico, con_detenido, materia_id, numero_carpeta, descripcion_solicitud, numero_llamado, perito_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         llamado_id,
@@ -667,7 +661,6 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
         mayus(descripcion_solicitud),
         numero, // ya viene en mayúsculas
         peritoFinal,
-        mayus(jefe_grupo), // solo lo captura el AIC; null si viene vacío
       ]
     );
 
@@ -697,7 +690,7 @@ router.post('/', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, re
 // ---------- EDITAR ----------
 // Administrador: todo (menos quien recibe/firma, que solo se llena con /firmar).
 // Receptor: solo asignar perito en una petición suya que todavía no tiene perito.
-router.put('/:id', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
+router.put('/:id', requerirRol(...PERMISOS.registrar), async (req, res) => {
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Id de petición inválido' });
 
@@ -705,7 +698,7 @@ router.put('/:id', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, 
   const n = (v) => (v === '' || v === undefined ? null : v);
 
   try {
-    if (req.usuario.rol === 'Receptor' || req.usuario.rol === 'AIC') {
+    if (RECEPTORES.includes(req.usuario.rol)) {
       const p = await pool.query(
         'SELECT receptor_id, perito_id, materia_id FROM peticiones WHERE id = $1',
         [id]
@@ -812,13 +805,11 @@ router.put('/:id', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, 
 // ---------- SUBIR PDF(s) (Administrador o Perito asignado) ----------
 router.post(
   '/:id/entrega',
-  requerirRol('Administrador', 'Perito', 'Policia'),
+  requerirRol(...PERMISOS.subirEntrega),
   subirArchivos,
   async (req, res) => {
     const { id } = req.params;
     const { tipo } = req.body;
-    // Reseña opcional que aplica a los PDF de este envío (máx. 500 caracteres)
-    const descripcion = String(req.body.descripcion || '').trim().slice(0, 500) || null;
     const archivos = req.files || [];
     const borrar = () => archivos.forEach((f) => fs.unlink(f.path, () => {}));
 
@@ -854,9 +845,9 @@ router.post(
       // Un registro por cada PDF (los anteriores se conservan)
       for (const f of archivos) {
         await client.query(
-          `INSERT INTO entrega_archivos (peticion_id, tipo, archivo_nombre, archivo_ruta, subido_por, descripcion)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [id, tipo, f.originalname, f.path, req.usuario.id, descripcion]
+          `INSERT INTO entrega_archivos (peticion_id, tipo, archivo_nombre, archivo_ruta, subido_por)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [id, tipo, f.originalname, f.path, req.usuario.id]
         );
       }
 
@@ -884,7 +875,7 @@ router.post(
 
       // Lo de un policía lo firma el AIC; lo de un perito, el Receptor
       await notificarRoles(
-        p.rows[0].rol_asignado === 'Policia' ? ['Administrador', 'AIC'] : ['Administrador', 'Receptor'],
+        p.rows[0].rol_asignado === POLICIA ? [ADMIN, AIC] : [ADMIN, RECEPTOR],
         req.usuario.id, id, 'lista_firma',
         `El llamado ${p.rows[0].numero_llamado} ya tiene PDF y está listo para firmarse`
       );
@@ -902,7 +893,7 @@ router.post(
 );
 
 // ---------- DATOS DE LA ENTREGA (JSON; null si no hay) ----------
-router.get('/:id/entrega', requerirRol(...TODOS), async (req, res) => {
+router.get('/:id/entrega', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Id inválido' });
 
@@ -945,11 +936,11 @@ async function accesoEntrega(req, res) {
 }
 
 // ---------- LISTA DE PDFs DE LA ENTREGA ----------
-router.get('/:id/entrega/archivos', requerirRol(...TODOS), async (req, res) => {
+router.get('/:id/entrega/archivos', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
   try {
     if (!(await accesoEntrega(req, res))) return;
     const r = await pool.query(
-      `SELECT id, tipo, archivo_nombre AS nombre_original, subido_en, descripcion
+      `SELECT id, tipo, archivo_nombre AS nombre_original, subido_en
          FROM entrega_archivos
         WHERE peticion_id = $1
         ORDER BY subido_en, id`,
@@ -963,7 +954,7 @@ router.get('/:id/entrega/archivos', requerirRol(...TODOS), async (req, res) => {
 });
 
 // ---------- VER UN PDF CONCRETO ----------
-router.get('/:id/entrega/archivo/:archivoId', requerirRol(...TODOS), async (req, res) => {
+router.get('/:id/entrega/archivo/:archivoId', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
   if (!/^\d+$/.test(req.params.archivoId)) {
     return res.status(400).json({ error: 'Id de archivo inválido' });
   }
@@ -993,7 +984,7 @@ router.get('/:id/entrega/archivo/:archivoId', requerirRol(...TODOS), async (req,
 // Se usa POST (y no DELETE) para no depender de que el cliente `api` del frontend tenga .delete
 router.post(
   '/:id/entrega/archivo/:archivoId/eliminar',
-  requerirRol('Administrador', 'Perito', 'Policia'),
+  requerirRol(...PERMISOS.subirEntrega),
   async (req, res) => {
     const { id, archivoId } = req.params;
     if (!/^\d+$/.test(id) || !/^\d+$/.test(archivoId)) {
@@ -1077,7 +1068,7 @@ router.post(
 );
 
 // ---------- COMPATIBILIDAD: ÚLTIMO PDF CARGADO ----------
-router.get('/:id/entrega/archivo', requerirRol(...TODOS), async (req, res) => {
+router.get('/:id/entrega/archivo', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
   try {
     if (!(await accesoEntrega(req, res))) return;
     const r = await pool.query(
@@ -1102,7 +1093,7 @@ router.get('/:id/entrega/archivo', requerirRol(...TODOS), async (req, res) => {
 });
 
 // ---------- FIRMAR RECEPCIÓN (Administrador o Receptor, con contraseña) ----------
-router.post('/:id/firmar', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
+router.post('/:id/firmar', requerirRol(...PERMISOS.firmar), async (req, res) => {
   const { id } = req.params;
   const { contrasena } = req.body;
 
@@ -1131,11 +1122,11 @@ router.post('/:id/firmar', requerirRol('Administrador', 'Receptor', 'AIC'), asyn
     if (!p.rows[0]) return res.status(404).json({ error: 'Petición no encontrada' });
 
     // Lo de un policía lo firma el AIC; lo de un perito, el Receptor (el Administrador firma todo)
-    const esDePolicia = p.rows[0].rol_asignado === 'Policia';
-    if (req.usuario.rol === 'Receptor' && esDePolicia) {
+    const esDePolicia = p.rows[0].rol_asignado === POLICIA;
+    if (req.usuario.rol === RECEPTOR && esDePolicia) {
       return res.status(403).json({ error: 'Esta entrega la firma un AIC' });
     }
-    if (req.usuario.rol === 'AIC' && !esDePolicia) {
+    if (req.usuario.rol === AIC && !esDePolicia) {
       return res.status(403).json({ error: 'Esta entrega la firma un receptor' });
     }
     if (!p.rows[0].tiene_pdf) {

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { SelectField } from "../reutilizables/Field";
-import { peticionesApi } from "../api/peticiones";
-import { estadisticasApi } from "../api/estadisticas";
-import ReporteEstadisticoPDF from "../reutilizables/ReporteEstadisticoPDF";
+import AppLayout from "../../reutilizables/AppLayout";
+import { SelectField } from "../../reutilizables/Field";
+import { peticionesApi } from "../../api/peticiones";
+import { estadisticasApi } from "../../api/estadisticas";
+import ReporteEstadisticoPDF from "../../reutilizables/ReporteEstadisticoPDF";
 import "./Estadisticas.css";
 
 const COLORES = [

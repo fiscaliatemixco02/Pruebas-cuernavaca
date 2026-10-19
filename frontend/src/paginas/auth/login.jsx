@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import fiscaliaLogo from "../assets/FISCALIA_LOGO.png";
+import { useAuth } from "../../context/AuthContext";
+import fiscaliaLogo from "../../assets/FISCALIA_LOGO.png";
 import "./Auth.css";
 
 export default function Login() {

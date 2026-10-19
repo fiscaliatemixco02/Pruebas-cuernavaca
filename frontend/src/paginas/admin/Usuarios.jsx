@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import AppLayout from "../reutilizables/AppLayout";
-import { usuariosApi } from "../api/usuarios";
+import AppLayout from "../../reutilizables/AppLayout";
+import { usuariosApi } from "../../api/usuarios";
 
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);

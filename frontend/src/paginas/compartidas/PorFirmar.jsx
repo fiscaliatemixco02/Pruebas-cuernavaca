@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import PeticionCard from "../reutilizables/PeticionCard";
-import { peticionesApi } from "../api/peticiones";
-import { useAuth } from "../context/AuthContext";
+import AppLayout from "../../reutilizables/AppLayout";
+import PeticionCard from "../../reutilizables/PeticionCard";
+import { peticionesApi } from "../../api/peticiones";
+import { useAuth } from "../../context/AuthContext";
 
 const INTERVALO_MS = 30000;
 

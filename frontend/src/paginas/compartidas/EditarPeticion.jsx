@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AppLayout from "../reutilizables/AppLayout";
-import { peticionesApi } from "../api/peticiones";
-import { api } from "../api/client";
-import { useAuth } from "../context/AuthContext";
+import AppLayout from "../../reutilizables/AppLayout";
+import { peticionesApi } from "../../api/peticiones";
+import { api } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 import PeticionWizard from "./PeticionWizard";
 
 const fmtFecha = (f) => (f ? String(f).slice(0, 10) : "");

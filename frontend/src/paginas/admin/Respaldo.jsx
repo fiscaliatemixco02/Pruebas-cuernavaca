@@ -1,6 +1,6 @@
 import { useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { api } from "../api/client";
+import AppLayout from "../../reutilizables/AppLayout";
+import { api } from "../../api/client";
 
 export default function Respaldo() {
   const [descargando, setDescargando] = useState(false);

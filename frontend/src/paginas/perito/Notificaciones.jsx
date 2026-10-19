@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import AppLayout from "../reutilizables/AppLayout";
-import { useAuth } from "../context/AuthContext";
-import { peticionesApi } from "../api/peticiones";
+import AppLayout from "../../reutilizables/AppLayout";
+import { useAuth } from "../../context/AuthContext";
+import { peticionesApi } from "../../api/peticiones";
 import "./Notificaciones.css";
 
 const TABS = [
