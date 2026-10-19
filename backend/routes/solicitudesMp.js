@@ -4,13 +4,11 @@ const path = require('path');
 const multer = require('multer');
 const pool = require('../db');
 const { requerirRol } = require('../middleware/auth');
+const { ROLES, PERMISOS } = require('../config/roles');
 
 const router = express.Router();
 
-const MP = 'Ministerio Publico';
-const ADMIN = 'Administrador';
-const RECEPTOR = 'Receptor';
-const AIC = 'AIC';
+const { MP, RECEPTOR, ADMIN } = ROLES;
 
 const MAX_ARCHIVOS = 10;
 
@@ -51,7 +49,7 @@ async function solicitudAccesible(req, res) {
 }
 
 // MP crea una solicitud con uno o varios PDF
-router.post('/', requerirRol(MP), (req, res) => {
+router.post('/', requerirRol(...PERMISOS.enviarSolicitud), (req, res) => {
   upload.array('pdfs', MAX_ARCHIVOS)(req, res, async (err) => {
     const archivos = req.files || [];
     const descartar = () => archivos.forEach((f) => fs.unlink(f.path, () => {}));
@@ -111,7 +109,7 @@ router.post('/', requerirRol(MP), (req, res) => {
             WHERE r.nom_rol = ANY($2) AND u.id <> $3`,
           [
             `Nueva solicitud del MP para la carpeta ${solicitud.numero_carpeta}`,
-            [RECEPTOR, AIC, ADMIN],
+            [RECEPTOR, ADMIN],
             quien(req).id,
           ]
         );
@@ -132,7 +130,7 @@ router.post('/', requerirRol(MP), (req, res) => {
 });
 
 // Listar: el MP ve las suyas; Receptor y Admin ven todas
-router.get('/', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+router.get('/', requerirRol(...PERMISOS.verSolicitudes), async (req, res) => {
   const u = quien(req);
   const esMP = u.rol === MP;
   try {
@@ -149,7 +147,7 @@ router.get('/', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
 
 // Carpetas del MP: una por número de carpeta de sus solicitudes
 // (con_resolucion = solicitudes cuya petición ya tiene PDF subidos por el perito/policía)
-router.get('/carpetas', requerirRol(MP), async (req, res) => {
+router.get('/carpetas', requerirRol(...PERMISOS.verMisCarpetas), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT UPPER(s.numero_carpeta) AS numero_carpeta,
@@ -173,7 +171,7 @@ router.get('/carpetas', requerirRol(MP), async (req, res) => {
 });
 
 // PDF de la resolución (los que subió el perito/policía a la petición ligada a la solicitud)
-router.get('/:id/resolucion', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+router.get('/:id/resolucion', requerirRol(...PERMISOS.verSolicitudes), async (req, res) => {
   try {
     const sol = await solicitudAccesible(req, res);
     if (!sol) return;
@@ -193,7 +191,7 @@ router.get('/:id/resolucion', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req,
 });
 
 // Ver un PDF concreto de la resolución
-router.get('/:id/resolucion/:archivoId', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+router.get('/:id/resolucion/:archivoId', requerirRol(...PERMISOS.verSolicitudes), async (req, res) => {
   try {
     if (!/^\d+$/.test(req.params.archivoId)) {
       return res.status(400).json({ error: 'Id de archivo inválido' });
@@ -225,7 +223,7 @@ router.get('/:id/resolucion/:archivoId', requerirRol(MP, RECEPTOR, AIC, ADMIN), 
 });
 
 // Lista de PDF de una solicitud
-router.get('/:id/pdfs', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+router.get('/:id/pdfs', requerirRol(...PERMISOS.verSolicitudes), async (req, res) => {
   try {
     const s = await solicitudAccesible(req, res);
     if (!s) return;
@@ -242,7 +240,7 @@ router.get('/:id/pdfs', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) 
 });
 
 // Ver un PDF concreto
-router.get('/:id/pdf/:archivoId', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+router.get('/:id/pdf/:archivoId', requerirRol(...PERMISOS.verSolicitudes), async (req, res) => {
   try {
     if (!/^\d+$/.test(req.params.archivoId)) {
       return res.status(400).json({ error: 'Id de archivo inválido' });
@@ -263,7 +261,7 @@ router.get('/:id/pdf/:archivoId', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (
 });
 
 // Compatibilidad: devuelve el primer PDF de la solicitud
-router.get('/:id/pdf', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) => {
+router.get('/:id/pdf', requerirRol(...PERMISOS.verSolicitudes), async (req, res) => {
   try {
     const s = await solicitudAccesible(req, res);
     if (!s) return;
@@ -276,7 +274,7 @@ router.get('/:id/pdf', requerirRol(MP, RECEPTOR, AIC, ADMIN), async (req, res) =
 });
 
 // El receptor marca la solicitud como atendida y la liga a la petición creada
-router.put('/:id/atender', requerirRol(RECEPTOR, AIC, ADMIN), async (req, res) => {
+router.put('/:id/atender', requerirRol(...PERMISOS.atenderSolicitud), async (req, res) => {
   const { peticion_id } = req.body;
   if (!peticion_id) return res.status(400).json({ error: 'Falta peticion_id' });
   try {

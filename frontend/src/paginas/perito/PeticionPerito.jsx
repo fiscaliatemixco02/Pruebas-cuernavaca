@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import AppLayout from "../reutilizables/AppLayout";
-import { peticionesApi } from "../api/peticiones";
-import { api } from "../api/client";
-import { SelectField } from "../reutilizables/Field";
-import ListaPdfsPendientes from "../reutilizables/ListaPdfsPendientes";
+import AppLayout from "../../reutilizables/AppLayout";
+import { peticionesApi } from "../../api/peticiones";
+import { api } from "../../api/client";
+import { SelectField } from "../../reutilizables/Field";
+import ListaPdfsPendientes from "../../reutilizables/ListaPdfsPendientes";
 
 const TIPOS = [
   { value: "dictamen", label: "Dictamen" },

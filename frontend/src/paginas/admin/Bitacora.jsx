@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { bitacoraApi } from "../api/bitacora";
+import AppLayout from "../../reutilizables/AppLayout";
+import { bitacoraApi } from "../../api/bitacora";
 
 export default function Bitacora() {
   const [registros, setRegistros] = useState([]);

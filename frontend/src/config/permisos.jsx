@@ -48,7 +48,7 @@ export const VISTAS = {
   respaldo:       [ADMIN],
   solicitudMP:          [MP],
   misCarpetas:          [MP],
-  solicitudesRecibidas: [ADMIN, RECEPTOR, AIC],
+  solicitudesRecibidas: [ADMIN, RECEPTOR],
   ordenInvestigacion:   [MP],
   ordenesRecibidas:     [AIC],
 };

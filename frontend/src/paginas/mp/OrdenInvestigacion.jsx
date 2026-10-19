@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { ordenesInvestigacionApi } from "../api/ordenesInvestigacion";
-import { SelectField, TextArea, TextField } from "../reutilizables/Field";
-import ListaPdfsPendientes from "../reutilizables/ListaPdfsPendientes";
-import BotonesPdfOrden from "../reutilizables/BotonesPdfOrden";
+import AppLayout from "../../reutilizables/AppLayout";
+import { ordenesInvestigacionApi } from "../../api/ordenesInvestigacion";
+import { SelectField, TextArea, TextField } from "../../reutilizables/Field";
+import ListaPdfsPendientes from "../../reutilizables/ListaPdfsPendientes";
+import BotonesPdfOrden from "../../reutilizables/BotonesPdfOrden";
 
 const AREAS = [
   { value: "POLICIAL", label: "Policial" },

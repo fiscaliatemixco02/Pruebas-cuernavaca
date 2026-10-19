@@ -1,16 +1,15 @@
 const express = require('express');
 const pool = require('../db');
 const { verificarToken, requerirRol } = require('../middleware/auth');
+const { PERMISOS } = require('../config/roles');
 
 const router = express.Router();
 
 // Todas las rutas exigen sesión
 router.use(verificarToken);
 
-const TODOS = ['Administrador', 'Receptor', 'AIC', 'Perito', 'Policia', 'Consulta'];
-
 // Catálogo de carpetas activas (todos los roles pueden verlo)
-router.get('/', requerirRol(...TODOS), async (req, res) => {
+router.get('/', requerirRol(...PERMISOS.verCarpetas), async (req, res) => {
   try {
     const resultado = await pool.query(
       'SELECT id, numero_carpeta FROM carpetas WHERE activo = true ORDER BY numero_carpeta'
@@ -22,8 +21,8 @@ router.get('/', requerirRol(...TODOS), async (req, res) => {
   }
 });
 
-// Solicitudes de MP que llegaron con el número de esta carpeta (Administrador, Receptor y AIC)
-router.get('/:id/solicitudes', requerirRol('Administrador', 'Receptor', 'AIC'), async (req, res) => {
+// Solicitudes de MP que llegaron con el número de esta carpeta (Administrador y Receptor)
+router.get('/:id/solicitudes', requerirRol(...PERMISOS.solicitudesDeCarpeta), async (req, res) => {
   const { id } = req.params;
   if (!/^\d+$/.test(id)) {
     return res.status(400).json({ error: 'Id de carpeta inválido' });
@@ -46,7 +45,7 @@ router.get('/:id/solicitudes', requerirRol('Administrador', 'Receptor', 'AIC'), 
 });
 
 // Crear carpeta nueva (solo Administrador)
-router.post('/', requerirRol('Administrador'), async (req, res) => {
+router.post('/', requerirRol(...PERMISOS.administrar), async (req, res) => {
   const { numero_carpeta } = req.body;
   if (!numero_carpeta || !numero_carpeta.trim()) {
     return res.status(400).json({ error: 'El número de carpeta es obligatorio' });
@@ -69,7 +68,7 @@ router.post('/', requerirRol('Administrador'), async (req, res) => {
 });
 
 // Baja lógica (solo Administrador)
-router.delete('/:id', requerirRol('Administrador'), async (req, res) => {
+router.delete('/:id', requerirRol(...PERMISOS.administrar), async (req, res) => {
   const { id } = req.params;
 
   if (!/^\d+$/.test(id)) {

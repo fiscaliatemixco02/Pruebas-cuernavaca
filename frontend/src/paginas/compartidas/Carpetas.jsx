@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import AppLayout from "../reutilizables/AppLayout";
-import { carpetasApi } from "../api/carpetas";
-import { peticionesApi } from "../api/peticiones";
-import { useAuth } from "../context/AuthContext";
+import AppLayout from "../../reutilizables/AppLayout";
+import { carpetasApi } from "../../api/carpetas";
+import { peticionesApi } from "../../api/peticiones";
+import { useAuth } from "../../context/AuthContext";
 
 function formatoFechaHora(valor) {
   if (!valor) return "";

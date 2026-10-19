@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { peticionesApi } from "../api/peticiones";
-import { usuariosApi } from "../api/usuarios";
-import { carpetasApi } from "../api/carpetas";
-import { useAuth } from "../context/AuthContext";
-import { RadioGroup, SelectField, TextArea, TextField } from "../reutilizables/Field";
+import { peticionesApi } from "../../api/peticiones";
+import { usuariosApi } from "../../api/usuarios";
+import { carpetasApi } from "../../api/carpetas";
+import { useAuth } from "../../context/AuthContext";
+import { RadioGroup, SelectField, TextArea, TextField } from "../../reutilizables/Field";
 
 const emptyForm = {
   llamado_id: "",

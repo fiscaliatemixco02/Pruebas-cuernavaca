@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { solicitudesMpApi } from "../api/solicitudesMp";
+import AppLayout from "../../reutilizables/AppLayout";
+import { solicitudesMpApi } from "../../api/solicitudesMp";
 
 const TIPOS = { dictamen: "Dictamen", informe: "Informe", requerimiento: "Requerimiento" };
 

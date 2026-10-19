@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { ordenesInvestigacionApi } from "../api/ordenesInvestigacion";
-import BotonesPdfOrden from "../reutilizables/BotonesPdfOrden";
+import AppLayout from "../../reutilizables/AppLayout";
+import { ordenesInvestigacionApi } from "../../api/ordenesInvestigacion";
+import BotonesPdfOrden from "../../reutilizables/BotonesPdfOrden";
 import AtenderOrdenInvestigacion from "./AtenderOrdenInvestigacion";
 
 const nombreArea = (v) => (v === "POLICIAL" ? "Policial" : v === "ANALISIS" ? "Análisis" : v);

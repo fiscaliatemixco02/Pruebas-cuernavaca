@@ -1,28 +1,28 @@
-import OrdenInvestigacion from "./paginas/OrdenInvestigacion";
-import OrdenesInvestigacionRecibidas from "./paginas/OrdenesInvestigacionRecibidas";
+import OrdenInvestigacion from "./paginas/mp/OrdenInvestigacion";
+import OrdenesInvestigacionRecibidas from "./paginas/aic/OrdenesInvestigacionRecibidas";
 
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./reutilizables/ProtectedRoute";
 
-import Estadisticas from "./paginas/Estadisticas";
-import Notificaciones from "./paginas/Notificaciones";
-import PeticionPerito from "./paginas/PeticionPerito";
-import Login from "./paginas/login";
-import CrearCuenta from "./paginas/CrearCuenta";
-import Home from "./paginas/Home";
-import NuevaPeticion from "./paginas/NuevaPeticion";
-import BuscarPeticion from "./paginas/BuscarPeticion";
-import EditarPeticion from "./paginas/EditarPeticion";
-import Bitacora from "./paginas/Bitacora";
-import Usuarios from "./paginas/Usuarios";
-import Carpetas from "./paginas/Carpetas";
-import { VISTAS } from "./paginas/permisos";
-import PorFirmar from "./paginas/PorFirmar";
-import Respaldo from "./paginas/Respaldo";
-import SolicitudMP from "./paginas/SolicitudMP";
-import CarpetasMP from "./paginas/CarpetasMP";
-import SolicitudesRecibidas from "./paginas/SolicitudesRecibidas";
+import Estadisticas from "./paginas/compartidas/Estadisticas";
+import Notificaciones from "./paginas/perito/Notificaciones";
+import PeticionPerito from "./paginas/perito/PeticionPerito";
+import Login from "./paginas/auth/login";
+import CrearCuenta from "./paginas/admin/CrearCuenta";
+import Home from "./paginas/compartidas/Home";
+import NuevaPeticion from "./paginas/compartidas/NuevaPeticion";
+import BuscarPeticion from "./paginas/compartidas/BuscarPeticion";
+import EditarPeticion from "./paginas/compartidas/EditarPeticion";
+import Bitacora from "./paginas/admin/Bitacora";
+import Usuarios from "./paginas/admin/Usuarios";
+import Carpetas from "./paginas/compartidas/Carpetas";
+import { VISTAS } from "./config/permisos";
+import PorFirmar from "./paginas/compartidas/PorFirmar";
+import Respaldo from "./paginas/admin/Respaldo";
+import SolicitudMP from "./paginas/mp/SolicitudMP";
+import CarpetasMP from "./paginas/mp/CarpetasMP";
+import SolicitudesRecibidas from "./paginas/receptor/SolicitudesRecibidas";
 
 
 export default function App() {

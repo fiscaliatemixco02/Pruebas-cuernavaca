@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import AppLayout from "../reutilizables/AppLayout";
-import { solicitudesMpApi } from "../api/solicitudesMp";
-import { SelectField, TextArea, TextField } from "../reutilizables/Field";
-import ListaPdfsPendientes from "../reutilizables/ListaPdfsPendientes";
+import AppLayout from "../../reutilizables/AppLayout";
+import { solicitudesMpApi } from "../../api/solicitudesMp";
+import { SelectField, TextArea, TextField } from "../../reutilizables/Field";
+import ListaPdfsPendientes from "../../reutilizables/ListaPdfsPendientes";
 
 const vacio = { numero_carpeta: "", materia_id: "", breve_resena: "" };
 
