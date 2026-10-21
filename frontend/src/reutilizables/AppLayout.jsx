@@ -100,6 +100,8 @@ const NAV_ITEMS = [
   { to: "/respaldo", label: "Respaldo", icon: "expedientes", vista: "respaldo" },
   { to: "/orden-investigacion", label: "Orden de Investigación (AIC)", icon: "nuevo", vista: "ordenInvestigacion" },
   { to: "/ordenes-recibidas", label: "Órdenes de Investigación", icon: "expedientes", vista: "ordenesRecibidas" },
+  { to: "/entrevistas", label: "Entrevistas", icon: "expedientes", vista: "entrevistas" },
+  { to: "/informe-inicial", label: "Informe inicial", icon: "expedientes", vista: "informeInicial" },
 ];
 
 export default function AppLayout({ title, children }) {

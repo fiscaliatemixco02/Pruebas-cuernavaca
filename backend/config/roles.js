@@ -47,6 +47,12 @@ const PERMISOS = {
   verSolicitudes:   [MP, RECEPTOR, ADMIN],   // solicitudes periciales: las atiende el Receptor (el AIC atiende las órdenes de investigación)
   atenderSolicitud: [RECEPTOR, ADMIN],
 
+  // Entrevistas e informes iniciales (carpeta + iniciales de la víctima + PDFs)
+  subirEntrevista:      [AIC, POLICIA],
+  verEntrevistas:       [ADMIN, AIC, POLICIA],   // el Policía solo ve las suyas
+  subirInformeInicial:  [POLICIA],
+  verInformesIniciales: [ADMIN, POLICIA],        // el Policía solo ve los suyos
+
   // Catálogos y listas de apoyo
   verCatalogos:  [ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA, MP], // llamados, materias
   verUsuarios:   [ADMIN, RECEPTOR, AIC],
