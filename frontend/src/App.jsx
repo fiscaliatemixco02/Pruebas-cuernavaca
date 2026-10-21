@@ -23,7 +23,8 @@ import Respaldo from "./paginas/admin/Respaldo";
 import SolicitudMP from "./paginas/mp/SolicitudMP";
 import CarpetasMP from "./paginas/mp/CarpetasMP";
 import SolicitudesRecibidas from "./paginas/receptor/SolicitudesRecibidas";
-
+import Entrevistas from "./paginas/compartidas/Entrevistas";
+import InformeInicial from "./paginas/perito/InformeInicial";
 
 export default function App() {
   return (
@@ -110,6 +111,10 @@ export default function App() {
           element={<ProtectedRoute roles={VISTAS.solicitudesRecibidas}><SolicitudesRecibidas /></ProtectedRoute>}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
+
+        <Route path="/entrevistas" element={<ProtectedRoute roles={VISTAS.entrevistas}><Entrevistas /></ProtectedRoute>} />
+
+        <Route path="/informe-inicial" element={<ProtectedRoute roles={VISTAS.informeInicial}><InformeInicial /></ProtectedRoute>} />
       </Routes>
     </AuthProvider>
   );

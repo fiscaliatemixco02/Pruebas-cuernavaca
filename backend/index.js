@@ -8,6 +8,7 @@ const carpetasRoutes = require('./routes/carpetas');
 const peticionesRoutes = require('./routes/peticiones');
 const solicitudesMpRoutes = require('./routes/solicitudesMp');
 const ordenesInvestigacionRoutes = require('./routes/ordenesInvestigacion');
+const crearRouterDocumentos = require('./routes/documentosPoliciales');
 const { verificarToken, requerirRol } = require('./middleware/auth');
 const { ROLES, PERMISOS } = require('./config/roles');
 const respaldoRoutes = require('./routes/respaldo');
@@ -42,6 +43,21 @@ app.use('/api/solicitudes-mp', verificarToken, solicitudesMpRoutes);
 
 // Órdenes de investigación del MP hacia el AIC (roles definidos dentro de routes/ordenesInvestigacion.js)
 app.use('/api/ordenes-investigacion', verificarToken, ordenesInvestigacionRoutes);
+
+// Entrevistas e informes iniciales (carpeta + iniciales de la víctima + PDFs)
+app.use(
+  '/api/entrevistas',
+  verificarToken,
+  crearRouterDocumentos('ENTREVISTA', { subir: PERMISOS.subirEntrevista, ver: PERMISOS.verEntrevistas })
+);
+app.use(
+  '/api/informes-iniciales',
+  verificarToken,
+  crearRouterDocumentos('INFORME_INICIAL', {
+    subir: PERMISOS.subirInformeInicial,
+    ver: PERMISOS.verInformesIniciales,
+  })
+);
 
 app.use('/api/notificaciones', require('./routes/notificaciones'));
 

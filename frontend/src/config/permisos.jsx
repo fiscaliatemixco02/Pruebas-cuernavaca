@@ -51,6 +51,8 @@ export const VISTAS = {
   solicitudesRecibidas: [ADMIN, RECEPTOR],
   ordenInvestigacion:   [MP],
   ordenesRecibidas:     [AIC],
+  entrevistas:    [ADMIN, AIC, POLICIA],
+  informeInicial: [ADMIN, POLICIA],
 };
 export function puedeVer(rol, vista) {
   if (!vista || !VISTAS[vista]) return true;
