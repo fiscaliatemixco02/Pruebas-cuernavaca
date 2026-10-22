@@ -5,6 +5,8 @@ import { peticionesApi } from "../../api/peticiones";
 import { api } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import PeticionWizard from "./PeticionWizard";
+import SelectorArchivos from "../../reutilizables/SelectorArchivos"; 
+import { mostrarPdf } from "../../reutilizables/visorPdf";
 
 const fmtFecha = (f) => (f ? String(f).slice(0, 10) : "");
 const fmtHora = (h) => (h ? String(h).slice(0, 8) : "");
@@ -285,9 +287,8 @@ export default function EditarPeticion() {
                     <option value="informe">Informe</option>
                     <option value="requerimiento">Requerimiento</option>
                   </select>
-                  <input
-                    type="file"
-                    accept="application/pdf"
+                  <SelectorArchivos 
+                  accept="application/pdf"
                     multiple
                     onChange={(e) => {
                       const nuevos = Array.from(e.target.files || []); // copiar ANTES de limpiar
@@ -299,15 +300,25 @@ export default function EditarPeticion() {
                     {subiendo ? "Subiendo..." : "Subir PDF"}
                   </button>
                 </div>
-                {archivos.length > 0 && (
-                  <ul style={{ margin: "8px 0", paddingLeft: 18 }}>
-                    {archivos.map((f, i) => (
-                      <li key={i} style={{ marginBottom: 4 }}>
-                        {f.name}{" "}
+                {pdfs.length > 0 && (
+                  <ul style={{ listStyleType: "disc", paddingLeft: "20px", margin: "8px 0", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {pdfs.map((archivo, index) => (
+                      <li key={index} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <span>{archivo.name}</span>
+
+                        {/* Este botón abre el modal flotante en la misma ventana */}
                         <button
                           type="button"
                           className="btn btn-secondary"
-                          onClick={() => setArchivos((p) => p.filter((_, j) => j !== i))}
+                          onClick={() => mostrarPdf(archivo, archivo.name)}
+                        >
+                          Vista previa
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => setPdfs((p) => p.filter((_, j) => j !== index))}
                         >
                           Quitar
                         </button>

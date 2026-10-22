@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import AppLayout from "../../reutilizables/AppLayout";
 import { solicitudesMpApi } from "../../api/solicitudesMp";
 import { SelectField, TextArea, TextField } from "../../reutilizables/Field";
-import ListaPdfsPendientes from "../../reutilizables/ListaPdfsPendientes";
+import SelectorArchivos from "../../reutilizables/SelectorArchivos"; 
+import { mostrarPdf } from "../../reutilizables/visorPdf";
 
 const vacio = { numero_carpeta: "", materia_id: "", breve_resena: "" };
 
@@ -15,13 +16,12 @@ export default function SolicitudMP() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [pdfsPorSolicitud, setPdfsPorSolicitud] = useState({}); // { [solicitudId]: [{ id, nombre_original }] }
+  const [pdfsPorSolicitud, setPdfsPorSolicitud] = useState({});
 
   const cargar = async () => {
     try {
       const filas = await solicitudesMpApi.listar();
       setLista(filas);
-      // Trae la lista de PDF de cada solicitud para poder mostrar un botón "Ver" por archivo
       const entradas = await Promise.all(
         filas.map((f) =>
           solicitudesMpApi
@@ -36,8 +36,13 @@ export default function SolicitudMP() {
     }
   };
 
-  const verPdf = (solicitudId, archivoId) =>
-    solicitudesMpApi.abrirPdf(solicitudId, archivoId).catch((e) => setError(e.message));
+  const verPdf = async (solicitudId, archivoId) => {
+    try {
+      await solicitudesMpApi.abrirPdf(solicitudId, archivoId);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   useEffect(() => {
     solicitudesMpApi.materias().then(setMaterias).catch((e) => setError(e.message));
@@ -61,7 +66,7 @@ export default function SolicitudMP() {
 
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-    pdfs.forEach((f) => fd.append("pdfs", f)); // mismo nombre para todos
+    pdfs.forEach((f) => fd.append("pdfs", f));
 
     setLoading(true);
     try {
@@ -104,20 +109,43 @@ export default function SolicitudMP() {
               <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
                 Oficio de solicitud (PDF, uno o varios)
               </label>
-              <input
-                type="file"
+              <SelectorArchivos
                 accept="application/pdf"
                 multiple
                 onChange={(e) => {
-                  const nuevos = Array.from(e.target.files || []); // copiar ANTES de limpiar
-                  e.target.value = ""; // permite volver a elegir el mismo archivo
+                  const nuevos = Array.from(e.target.files || []);
+                  e.target.value = "";
                   setPdfs((prev) => [...prev, ...nuevos]);
                 }}
               />
-              <ListaPdfsPendientes
-                archivos={pdfs}
-                onQuitar={(i) => setPdfs((p) => p.filter((_, j) => j !== i))}
-              />
+              
+              {/* Lista de PDFs pendientes con botón de Vista Previa local integrado en la misma ventana */}
+              {pdfs.length > 0 && (
+                <ul style={{ listStyleType: "disc", paddingLeft: "20px", margin: "8px 0", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {pdfs.map((archivo, index) => (
+                    <li key={index} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <span>{archivo.name}</span>
+
+                      {/* Este botón abre el modal flotante en la misma ventana */}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => mostrarPdf(archivo, archivo.name)}
+                      >
+                        Vista previa
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setPdfs((p) => p.filter((_, j) => j !== index))}
+                      >
+                        Quitar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
           <TextArea
@@ -172,7 +200,6 @@ export default function SolicitudMP() {
                       ))}
                     </ul>
                   ) : (
-                    // Solicitudes anteriores sin lista de archivos: abre el primer PDF
                     <button type="button" className="btn btn-secondary" onClick={() => verPdf(s.id)}>
                       Ver
                     </button>

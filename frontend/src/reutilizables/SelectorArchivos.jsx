@@ -1,15 +1,6 @@
 // frontend/src/reutilizables/SelectorArchivos.jsx
-//
-// Reemplaza al <input type="file"> normal. El texto "Choose file / No file chosen" que muestra
-// el navegador depende del idioma del navegador y no se puede cambiar; este componente lo
-// sustituye por un botón y mensajes en español.
-//
-// Se usa igual que el input:
-//   <SelectorArchivos accept="application/pdf" multiple onChange={(e) => ...} />
-
 import { useRef, useState } from "react";
 
-// Oculto a la vista pero sigue en el formulario (así funcionan `required` y el teclado)
 const ocultar = {
   position: "absolute",
   width: 1,
@@ -29,8 +20,6 @@ export default function SelectorArchivos({ onChange, multiple, texto, ...resto }
   function alCambiar(e) {
     const nombres = Array.from(e.target.files || []).map((f) => f.name);
     onChange?.(e);
-    // Si la pantalla ya tomó los archivos y vació el campo (los muestra ella en su lista),
-    // no repetimos el nombre aquí
     const consumidos = (e.target.files?.length || 0) === 0;
     setElegidos(consumidos ? "" : nombres.length === 1 ? nombres[0] : `${nombres.length} archivos seleccionados`);
   }

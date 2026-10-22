@@ -7,6 +7,7 @@ import useTrabajoPendiente from "../reutilizables/useTrabajoPendiente";
 import { notificacionesApi } from "../api/notificaciones";
 import fiscaliaLogo from "../assets/FISCALIA_LOGO.png";
 import "./AppLayout.css";
+import VisorPdf from "./VisorPdf.jsx";
 
 const ICONS = {
   inicio: (
@@ -115,19 +116,18 @@ export default function AppLayout({ title, children }) {
   const visibleItems = NAV_ITEMS.filter((item) => puedeVer(user?.rol, item.vista));
 
   // Qué items del menú llevan puntito rojo
-const conteo = useTrabajoPendiente();
-const esPerito = user?.rol === "Perito" || user?.rol === "Policia";
-const puedeFirmar = ["Administrador", "Receptor", "AIC"].includes(user?.rol);
+  const conteo = useTrabajoPendiente();
+  const esPerito = user?.rol === "Perito" || user?.rol === "Policia";
+  const puedeFirmar = ["Administrador", "Receptor", "AIC"].includes(user?.rol);
 
-// El punto se queda mientras haya trabajo pendiente
-const puntos = {
-  notificaciones: esPerito && conteo.por_entregar > 0,
-  porFirmar: puedeFirmar && conteo.por_firmar > 0,
-  // Solicitudes nuevas de MP sin revisar (Administrador y Receptor)
-  solicitudesRecibidas: puedeFirmar && pendientes.some((n) => n.tipo === "solicitud_mp"),
-  ordenesRecibidas: user?.rol === "AIC" && pendientes.some((n) => n.tipo === "orden_aic"),
-};
-
+  // El punto se queda mientras haya trabajo pendiente
+  const puntos = {
+    notificaciones: esPerito && conteo.por_entregar > 0,
+    porFirmar: puedeFirmar && conteo.por_firmar > 0,
+    // Solicitudes nuevas de MP sin revisar (Administrador y Receptor)
+    solicitudesRecibidas: puedeFirmar && pendientes.some((n) => n.tipo === "solicitud_mp"),
+    ordenesRecibidas: user?.rol === "AIC" && pendientes.some((n) => n.tipo === "orden_aic"),
+  };
 
   // Al entrar a la pantalla, se marcan como leídas y el punto se apaga
   useEffect(() => {
@@ -221,6 +221,9 @@ const puntos = {
 
         <main className="shell-content">{children}</main>
       </div>
+
+      {/* Visor global de PDF montado en el layout principal para las vistas previas locales */}
+      <VisorPdf />
     </div>
   );
 }
