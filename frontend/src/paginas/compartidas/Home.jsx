@@ -6,10 +6,6 @@ import "./Home.css";
 export default function Home() {
   const { user } = useAuth();
 
-  if (user?.rol === "Ministerio Publico") {
-    return <Navigate to="/solicitud-mp" replace />;
-  }
-
   return (
     <AppLayout>
       <div className="home-hero">

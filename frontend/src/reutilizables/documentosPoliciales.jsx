@@ -158,21 +158,24 @@ export default function DocumentosPoliciales({
                 }}
               />
               {pdfs.length > 0 && (
-                <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-                  {pdfs.map((f, i) => (
-                    <li key={i} style={{ marginBottom: 4 }}>
-                      {f.name}{" "}
+                <ul style={{ listStyleType: "disc", paddingLeft: "20px", margin: "8px 0", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {pdfs.map((archivo, index) => (
+                    <li key={index} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <span>{archivo.name}</span>
+
+                      {/* Este botón abre el modal flotante en la misma ventana */}
                       <button
                         type="button"
                         className="btn btn-secondary"
-                        onClick={() => mostrarPdf(f, f.name)}
+                        onClick={() => mostrarPdf(archivo, archivo.name)}
                       >
                         Vista previa
-                      </button>{" "}
+                      </button>
+
                       <button
                         type="button"
                         className="btn btn-secondary"
-                        onClick={() => setPdfs((p) => p.filter((_, j) => j !== i))}
+                        onClick={() => setPdfs((p) => p.filter((_, j) => j !== index))}
                       >
                         Quitar
                       </button>

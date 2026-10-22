@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import AppLayout from "../../reutilizables/AppLayout";
 import { ordenesInvestigacionApi } from "../../api/ordenesInvestigacion";
 import { SelectField, TextArea, TextField } from "../../reutilizables/Field";
-import ListaPdfsPendientes from "../../reutilizables/ListaPdfsPendientes";
 import BotonesPdfOrden from "../../reutilizables/BotonesPdfOrden";
+import SelectorArchivos from "../../reutilizables/SelectorArchivos"; 
+import { mostrarPdf } from "../../reutilizables/visorPdf"; // <--- Importado para el modal flotante
 
 const AREAS = [
   { value: "POLICIAL", label: "Policial" },
@@ -115,8 +116,7 @@ export default function OrdenInvestigacion() {
               <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
                 Oficio de solicitud (PDF, uno o varios)
               </label>
-              <input
-                type="file"
+              <SelectorArchivos
                 accept="application/pdf"
                 multiple
                 onChange={(e) => {
@@ -125,10 +125,33 @@ export default function OrdenInvestigacion() {
                   setPdfs((prev) => [...prev, ...nuevos]);
                 }}
               />
-              <ListaPdfsPendientes
-                archivos={pdfs}
-                onQuitar={(i) => setPdfs((p) => p.filter((_, j) => j !== i))}
-              />
+              
+              {/* Lista de archivos seleccionados con su botón de Vista previa integrado */}
+              {pdfs.length > 0 && (
+                <ul style={{ listStyleType: "disc", paddingLeft: "20px", margin: "8px 0", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {pdfs.map((archivo, index) => (
+                    <li key={index} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <span>{archivo.name}</span>
+                      
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => mostrarPdf(archivo, archivo.name)}
+                      >
+                        Vista previa
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setPdfs((p) => p.filter((_, j) => j !== index))}
+                      >
+                        Quitar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
           <TextArea

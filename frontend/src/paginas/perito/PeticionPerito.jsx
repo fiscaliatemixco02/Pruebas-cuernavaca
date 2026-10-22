@@ -5,6 +5,7 @@ import { peticionesApi } from "../../api/peticiones";
 import { api } from "../../api/client";
 import { SelectField } from "../../reutilizables/Field";
 import ListaPdfsPendientes from "../../reutilizables/ListaPdfsPendientes";
+import SelectorArchivos from "../../reutilizables/SelectorArchivos"; 
 
 const TIPOS = [
   { value: "dictamen", label: "Dictamen" },
@@ -249,9 +250,8 @@ export default function PeticionPerito() {
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
                 <div style={{ flex: "1 1 260px" }}>
               <div className="file-input-row">
-                <input
-                  type="file"
-                  accept="application/pdf"
+                <SelectorArchivos 
+                accept="application/pdf"
                   multiple
                   onChange={(e) => {
                     const nuevos = Array.from(e.target.files || []); // copiar ANTES de limpiar
