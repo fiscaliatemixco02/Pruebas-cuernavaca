@@ -9,6 +9,10 @@ export const solicitudesMpApi = {
   // Lista de PDF de una solicitud: [{ id, nombre_original }]
   pdfs: (id) => api.get(`/solicitudes-mp/${id}/pdfs`),
 
+  // Blob de un PDF (para la vista previa dentro de la pantalla)
+  pdfBlob: (id, archivoId) =>
+    api.getBlob(archivoId ? `/solicitudes-mp/${id}/pdf/${archivoId}` : `/solicitudes-mp/${id}/pdf`),
+
   // Carpetas del MP (una por número de carpeta de sus solicitudes)
   carpetas: () => api.get("/solicitudes-mp/carpetas"),
 

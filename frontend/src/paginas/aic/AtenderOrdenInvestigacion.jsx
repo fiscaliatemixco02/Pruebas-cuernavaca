@@ -3,81 +3,9 @@ import { ordenesInvestigacionApi } from "../../api/ordenesInvestigacion";
 import { peticionesApi } from "../../api/peticiones";
 import { useAuth } from "../../context/AuthContext";
 import { SelectField, TextArea, TextField } from "../../reutilizables/Field";
-import "./AtenderOrden.css";
+import VisorPdfsPanel from "../../reutilizables/VisorPdfsPanel";
 
 const nombreCompleto = (u) => [u?.nombre, u?.apellidos].filter(Boolean).join(" ");
-
-/* Visor de los PDF que mandó el MP (a un costado del formulario) */
-function VisorPdfs({ orden, pdfs }) {
-  const [activo, setActivo] = useState(null);
-  const [url, setUrl] = useState("");
-  const [errorVisor, setErrorVisor] = useState("");
-
-  useEffect(() => {
-    if (pdfs.length > 0 && activo === null) setActivo(pdfs[0].id);
-  }, [pdfs, activo]);
-
-  useEffect(() => {
-    if (activo === null) return undefined;
-    let vivo = true;
-    let blobUrl = "";
-    setErrorVisor("");
-    ordenesInvestigacionApi
-      .pdfBlob(orden.id, activo)
-      .then((blob) => {
-        if (!vivo) return;
-        blobUrl = URL.createObjectURL(blob);
-        setUrl(blobUrl);
-      })
-      .catch((e) => vivo && setErrorVisor(e.message));
-    return () => {
-      vivo = false;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-      setUrl("");
-    };
-  }, [orden.id, activo]);
-
-  const actual = pdfs.find((p) => p.id === activo);
-
-  return (
-    <div className="card atender-visor">
-      <h3 style={{ marginTop: 0 }}>Oficio del MP</h3>
-      {pdfs.length === 0 ? (
-        <p>Esta orden no tiene archivos.</p>
-      ) : (
-        <>
-          <div className="atender-visor-tabs">
-            {pdfs.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className={"btn " + (p.id === activo ? "btn-primary" : "btn-secondary")}
-                onClick={() => setActivo(p.id)}
-              >
-                {p.nombre_original}
-              </button>
-            ))}
-          </div>
-          {errorVisor && <div className="status-banner error">{errorVisor}</div>}
-          {url ? (
-            <>
-              <iframe
-                className="atender-visor-marco"
-                src={url}
-                title={`Vista previa de ${actual?.nombre_original ?? "PDF"}`}
-              />
-              <p style={{ marginBottom: 0 }}>
-                <a href={url} target="_blank" rel="noreferrer">Abrir en pestaña nueva</a>
-              </p>
-            </>
-          ) : (
-            !errorVisor && <p>Cargando PDF...</p>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
 
 /* Formulario del AIC: el de "Nuevo registro" sin llamado, materia ni con/sin detenido */
 export default function AtenderOrdenInvestigacion({ orden, onVolver, onAtendida }) {
@@ -193,7 +121,15 @@ export default function AtenderOrdenInvestigacion({ orden, onVolver, onAtendida 
           </div>
         </form>
 
-        <VisorPdfs orden={orden} pdfs={pdfs} />
+        <VisorPdfsPanel
+          titulo="Oficio del MP"
+          textoVacio="Esta orden no tiene archivos."
+          items={pdfs.map((p) => ({
+            id: p.id,
+            nombre: p.nombre_original,
+            fuente: () => ordenesInvestigacionApi.pdfBlob(orden.id, p.id),
+          }))}
+        />
       </div>
     </div>
   );

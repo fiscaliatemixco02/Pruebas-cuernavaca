@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "../../reutilizables/AppLayout";
 import { solicitudesMpApi } from "../../api/solicitudesMp";
 import PeticionWizard from "../compartidas/PeticionWizard";
+import VisorPdfsPanel from "../../reutilizables/VisorPdfsPanel";
 
 /* Botones "Ver" de los PDF de una solicitud (uno por archivo).
    Si la solicitud es antigua y no tiene lista de archivos, abre el primero. */
@@ -30,6 +31,17 @@ function BotonesPdf({ solicitudId, pdfs, onVer }) {
     </ul>
   );
 }
+
+/* Archivos de una solicitud en el formato del visor. Si es una solicitud antigua
+   sin lista de archivos, se muestra el primero (ruta de compatibilidad). */
+const itemsVisor = (solicitudId, pdfs) =>
+  !pdfs || pdfs.length === 0
+    ? [{ id: "principal", nombre: "Oficio.pdf", fuente: () => solicitudesMpApi.pdfBlob(solicitudId) }]
+    : pdfs.map((p) => ({
+        id: p.id,
+        nombre: p.nombre_original,
+        fuente: () => solicitudesMpApi.pdfBlob(solicitudId, p.id),
+      }));
 
 export default function SolicitudesRecibidas() {
   const [lista, setLista] = useState([]);
@@ -76,18 +88,22 @@ export default function SolicitudesRecibidas() {
     return (
       <AppLayout title="Atender solicitud de MP">
         <button className="btn" onClick={() => setActiva(null)}>← Volver</button>
-        <div className="card" style={{ margin: "16px 0" }}>
-          <p><b>MP:</b> {activa.nombre_mp}</p>
-          <p><b>Área solicitada:</b> {activa.materia}</p>
-          <p><b>Reseña:</b> {activa.breve_resena}</p>
-          <p><b>Oficio (PDF):</b></p>
-          <BotonesPdf
-            solicitudId={activa.id}
-            pdfs={pdfsPorSolicitud[activa.id]}
-            onVer={verPdf}
+        <div className="atender-grid" style={{ marginTop: 16 }}>
+          <div>
+            <div className="card" style={{ marginBottom: 20 }}>
+              <p><b>MP:</b> {activa.nombre_mp}</p>
+              <p><b>Área solicitada:</b> {activa.materia}</p>
+              <p style={{ marginBottom: 0 }}><b>Reseña:</b> {activa.breve_resena}</p>
+            </div>
+            <PeticionWizard mode="nueva" solicitudMp={activa} onSaved={alGuardar} />
+          </div>
+
+          <VisorPdfsPanel
+            titulo="Oficio del MP"
+            textoVacio="Esta solicitud no tiene archivos."
+            items={itemsVisor(activa.id, pdfsPorSolicitud[activa.id])}
           />
         </div>
-        <PeticionWizard mode="nueva" solicitudMp={activa} onSaved={alGuardar} />
       </AppLayout>
     );
   }

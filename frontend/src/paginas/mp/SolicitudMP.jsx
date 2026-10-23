@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import AppLayout from "../../reutilizables/AppLayout";
 import { solicitudesMpApi } from "../../api/solicitudesMp";
 import { SelectField, TextArea, TextField } from "../../reutilizables/Field";
-import SelectorArchivos from "../../reutilizables/SelectorArchivos"; 
-import { mostrarPdf } from "../../reutilizables/visorPdf";
+import SelectorArchivos from "../../reutilizables/SelectorArchivos";
+import VisorPdfsPanel, { idArchivo } from "../../reutilizables/VisorPdfsPanel";
 
 const vacio = { numero_carpeta: "", materia_id: "", breve_resena: "" };
 
@@ -88,8 +88,8 @@ export default function SolicitudMP() {
       {error && <div className="status-banner error">{error}</div>}
       {success && <div className="status-banner success">{success}</div>}
 
-      <form className="card" onSubmit={enviar}>
-        <div className="form-grid">
+      <div className="atender-grid">
+        <form className="card" onSubmit={enviar}>
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <TextField
               label="Número de carpeta"
@@ -105,6 +105,13 @@ export default function SolicitudMP() {
               onChange={(e) => set("materia_id", e.target.value)}
               required
             />
+            <TextArea
+              label="Breve reseña"
+              value={form.breve_resena}
+              onChange={(e) => set("breve_resena", e.target.value.toUpperCase())}
+              required
+            />
+
             <div>
               <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
                 Oficio de solicitud (PDF, uno o varios)
@@ -118,23 +125,13 @@ export default function SolicitudMP() {
                   setPdfs((prev) => [...prev, ...nuevos]);
                 }}
               />
-              
-              {/* Lista de PDFs pendientes con botón de Vista Previa local integrado en la misma ventana */}
+
+              {/* Archivos elegidos: se previsualizan en el panel de la derecha */}
               {pdfs.length > 0 && (
                 <ul style={{ listStyleType: "disc", paddingLeft: "20px", margin: "8px 0", display: "flex", flexDirection: "column", gap: "6px" }}>
                   {pdfs.map((archivo, index) => (
-                    <li key={index} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <li key={idArchivo(archivo)} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                       <span>{archivo.name}</span>
-
-                      {/* Este botón abre el modal flotante en la misma ventana */}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => mostrarPdf(archivo, archivo.name)}
-                      >
-                        Vista previa
-                      </button>
-
                       <button
                         type="button"
                         className="btn btn-secondary"
@@ -148,19 +145,24 @@ export default function SolicitudMP() {
               )}
             </div>
           </div>
-          <TextArea
-            label="Breve reseña"
-            value={form.breve_resena}
-            onChange={(e) => set("breve_resena", e.target.value.toUpperCase())}
-            required
-          />
-        </div>
-        <div className="btn-row end">
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? "Enviando..." : "Enviar solicitud"}
-          </button>
-        </div>
-      </form>
+
+          <div className="btn-row end" style={{ marginTop: 24 }}>
+            <button className="btn btn-primary" type="submit" disabled={loading}>
+              {loading ? "Enviando..." : "Enviar solicitud"}
+            </button>
+          </div>
+        </form>
+
+        <VisorPdfsPanel
+          titulo="Vista previa del oficio"
+          textoVacio="Selecciona un PDF para ver su vista previa aquí."
+          items={pdfs.map((f) => ({
+            id: idArchivo(f),
+            nombre: f.name,
+            fuente: f,
+          }))}
+        />
+      </div>
 
       <div className="card" style={{ marginTop: 24 }}>
         <h3 style={{ marginTop: 0 }}>Mis solicitudes</h3>
