@@ -25,6 +25,7 @@ import CarpetasMP from "./paginas/mp/CarpetasMP";
 import SolicitudesRecibidas from "./paginas/receptor/SolicitudesRecibidas";
 import Entrevistas from "./paginas/compartidas/Entrevistas";
 import InformeInicial from "./paginas/perito/InformeInicial";
+import CambiarContrasena from "./paginas/compartidas/Cambiarcontrasena";
 
 export default function App() {
   return (
@@ -115,6 +116,8 @@ export default function App() {
         <Route path="/entrevistas" element={<ProtectedRoute roles={VISTAS.entrevistas}><Entrevistas /></ProtectedRoute>} />
 
         <Route path="/informe-inicial" element={<ProtectedRoute roles={VISTAS.informeInicial}><InformeInicial /></ProtectedRoute>} />
+
+        <Route path="/cambiar-contrasena" element={<ProtectedRoute roles={VISTAS.cambiarContrasena}><CambiarContrasena /></ProtectedRoute>} />
       </Routes>
     </AuthProvider>
   );
