@@ -53,6 +53,7 @@ export const VISTAS = {
   ordenesRecibidas:     [AIC],
   entrevistas:    [ADMIN, AIC, POLICIA],
   informeInicial: [ADMIN, POLICIA],
+  cambiarContrasena: [ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA, MP],
 };
 export function puedeVer(rol, vista) {
   if (!vista || !VISTAS[vista]) return true;

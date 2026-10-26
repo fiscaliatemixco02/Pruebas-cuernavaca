@@ -103,6 +103,7 @@ const NAV_ITEMS = [
   { to: "/ordenes-recibidas", label: "Órdenes de Investigación", icon: "expedientes", vista: "ordenesRecibidas" },
   { to: "/entrevistas", label: "Entrevistas", icon: "expedientes", vista: "entrevistas" },
   { to: "/informe-inicial", label: "Informe inicial", icon: "expedientes", vista: "informeInicial" },
+  { to: "/cambiar-contrasena", label: "Cambiar contraseña", icon: "editar", vista: "cambiarContrasena" },
 ];
 
 export default function AppLayout({ title, children }) {
