@@ -1,0 +1,7 @@
+
+-- Copia cifrada (AES-256-GCM) de la contraseña, para que el Administrador
+-- pueda verla tras confirmar su propia contraseña. El login sigue usando bcrypt.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password_cifrada TEXT;
+
+INSERT INTO acciones (nom_accion) VALUES ('Ver contraseña')
+ON CONFLICT (nom_accion) DO NOTHING;
