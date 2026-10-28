@@ -25,8 +25,7 @@ import CarpetasMP from "./paginas/mp/CarpetasMP";
 import SolicitudesRecibidas from "./paginas/receptor/SolicitudesRecibidas";
 import Entrevistas from "./paginas/compartidas/Entrevistas";
 import InformeInicial from "./paginas/perito/InformeInicial";
-import CambiarContrasena from "./paginas/compartidas/Cambiarcontrasena";
-
+import CambiarContrasena from "./paginas/compartidas/CambiarContrasena";
 export default function App() {
   return (
     <AuthProvider>
