@@ -6,6 +6,7 @@ const pool = require('../db');
 const { enviarCorreoCodigo } = require('../mailer');
 const { verificarToken, requerirRol } = require('../middleware/auth');
 const { ROLES, PERMISOS, ROLES_NO_ASIGNABLES_POR_CREADOR } = require('../config/roles');
+const { cifrar, descifrar } = require('../utils/cifrado');
 
 const router = express.Router();
 const ADMIN = 'Administrador';
@@ -124,7 +125,10 @@ router.put('/cambiar-contrasena', verificarToken, async (req, res) => {
     }
 
     const nuevoHash = await bcrypt.hash(nuevaContrasena, 10);
-    await pool.query('UPDATE usuarios SET password_hash = $1 WHERE id = $2', [nuevoHash, usuarioId]);
+    await pool.query(
+      'UPDATE usuarios SET password_hash = $1, password_cifrada = $2 WHERE id = $3',
+      [nuevoHash, cifrar(nuevaContrasena), usuarioId]
+    );
 
     res.json({ mensaje: 'Contraseña actualizada correctamente' });
   } catch (error) {
@@ -270,10 +274,10 @@ router.post('/registro', verificarToken, requerirRol(...PERMISOS.crearCuentas), 
     const passwordHash = await bcrypt.hash(contrasena, 10);
 
     const nuevoUsuario = await client.query(
-      `INSERT INTO usuarios (nombre, correo, rol_id, password_hash, verificado, materia_id)
-       VALUES ($1, $2, $3, $4, TRUE, $5)
+      `INSERT INTO usuarios (nombre, correo, rol_id, password_hash, password_cifrada, verificado, materia_id)
+       VALUES ($1, $2, $3, $4, $5, TRUE, $6)
        RETURNING id, nombre, correo`,
-      [nombreCompleto, correo, rolId, passwordHash, materiaId]
+      [nombreCompleto, correo, rolId, passwordHash, cifrar(contrasena), materiaId]
     );
 
     await client.query('DELETE FROM verificaciones_correo WHERE correo = $1', [correo]);
@@ -312,7 +316,10 @@ router.put('/admin/cambiar-contrasena', verificarToken, requerirRol(ADMIN), asyn
 
   try {
     const nuevoHash = await bcrypt.hash(nuevaContrasena, 10);
-    const resultado = await pool.query('UPDATE usuarios SET password_hash = $1 WHERE id = $2', [nuevoHash, id]);
+    const resultado = await pool.query(
+      'UPDATE usuarios SET password_hash = $1, password_cifrada = $2 WHERE id = $3',
+      [nuevoHash, cifrar(nuevaContrasena), id]
+    );
 
     if (resultado.rowCount === 0) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -322,6 +329,72 @@ router.put('/admin/cambiar-contrasena', verificarToken, requerirRol(ADMIN), asyn
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al cambiar la contraseña' });
+  }
+});
+
+// ---------- VER CONTRASEÑA DE UN USUARIO (solo Administrador, con SU PROPIA contraseña) ----------
+// Límite de intentos fallidos por administrador (en memoria): 5 en 15 minutos.
+const intentosVerContrasena = new Map();
+const MAX_INTENTOS = 5;
+const VENTANA_MS = 15 * 60 * 1000;
+
+router.post('/admin/ver-contrasena', verificarToken, requerirRol(ADMIN), async (req, res) => {
+  const { id, contrasenaAdmin } = req.body;
+  const adminId = req.usuario.id;
+
+  if (!id || !contrasenaAdmin) {
+    return res.status(400).json({ error: 'Escribe tu contraseña de administrador para ver esta contraseña' });
+  }
+
+  const ahora = Date.now();
+  const registro = intentosVerContrasena.get(adminId);
+  if (registro && ahora - registro.desde < VENTANA_MS && registro.fallos >= MAX_INTENTOS) {
+    return res.status(429).json({ error: 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo' });
+  }
+
+  try {
+    // 1) Verifica la contraseña del administrador de la sesión (el id sale del token)
+    const admin = await pool.query('SELECT password_hash FROM usuarios WHERE id = $1', [adminId]);
+    const coincide =
+      admin.rows[0]?.password_hash && (await bcrypt.compare(contrasenaAdmin, admin.rows[0].password_hash));
+
+    if (!coincide) {
+      const vigente = registro && ahora - registro.desde < VENTANA_MS;
+      intentosVerContrasena.set(adminId, {
+        desde: vigente ? registro.desde : ahora,
+        fallos: vigente ? registro.fallos + 1 : 1,
+      });
+      // 403 y no 401, para que el frontend no lo tome como sesión vencida
+      return res.status(403).json({ error: 'Tu contraseña de administrador es incorrecta' });
+    }
+    intentosVerContrasena.delete(adminId);
+
+    // 2) Descifra la contraseña del usuario solicitado
+    const usuario = await pool.query('SELECT password_cifrada FROM usuarios WHERE id = $1', [id]);
+    if (usuario.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    if (!usuario.rows[0].password_cifrada) {
+      return res.status(404).json({
+        error: 'Esta contraseña no se puede mostrar porque se guardó antes del cambio. Asigna una nueva contraseña para poder verla',
+      });
+    }
+
+    const contrasena = descifrar(usuario.rows[0].password_cifrada);
+
+    // 3) Queda registro en la bitácora de quién consultó una contraseña
+    await pool
+      .query(
+        `INSERT INTO bitacora (us_id, acc_id)
+         VALUES ($1, (SELECT id FROM acciones WHERE nom_accion = 'Ver contraseña'))`,
+        [adminId]
+      )
+      .catch((e) => console.error('Error en Bitácora:', e.message));
+
+    res.json({ contrasena });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo obtener la contraseña' });
   }
 });
 

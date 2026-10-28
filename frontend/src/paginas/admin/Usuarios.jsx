@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import AppLayout from "../../reutilizables/AppLayout";
 import { usuariosApi } from "../../api/usuarios";
@@ -13,6 +13,18 @@ export default function Usuarios() {
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState("");
   const [avisoEsError, setAvisoEsError] = useState(false);
+
+  // Ver contraseña: pide la contraseña del propio administrador
+  const [verId, setVerId] = useState(null);
+  const [contrasenaAdmin, setContrasenaAdmin] = useState("");
+  const [verificando, setVerificando] = useState(false);
+  const [visibles, setVisibles] = useState({}); // { [idUsuario]: contraseña en texto }
+  const temporizadores = useRef({});
+
+  useEffect(() => {
+    const t = temporizadores.current;
+    return () => Object.values(t).forEach(clearTimeout);
+  }, []);
 
   useEffect(() => {
     cargar();
@@ -32,8 +44,52 @@ export default function Usuarios() {
     setAvisoEsError(esError);
   }
 
+  function iniciarVerContrasena(id) {
+    setAviso("");
+    setEditandoId(null);
+    setVerId(id);
+    setContrasenaAdmin("");
+  }
+
+  function cancelarVerContrasena() {
+    setVerId(null);
+    setContrasenaAdmin("");
+  }
+
+  function ocultarContrasena(id) {
+    clearTimeout(temporizadores.current[id]);
+    setVisibles((v) => {
+      const copia = { ...v };
+      delete copia[id];
+      return copia;
+    });
+  }
+
+  async function confirmarVerContrasena(id) {
+    if (!contrasenaAdmin) {
+      mostrarAviso("Escribe tu contraseña de administrador.", true);
+      return;
+    }
+    setVerificando(true);
+    setAviso("");
+    try {
+      const { contrasena } = await usuariosApi.verContrasena({ id, contrasenaAdmin });
+      setVisibles((v) => ({ ...v, [id]: contrasena }));
+      // Se vuelve a ocultar sola a los 30 segundos
+      clearTimeout(temporizadores.current[id]);
+      temporizadores.current[id] = setTimeout(() => ocultarContrasena(id), 30000);
+      cancelarVerContrasena();
+    } catch (err) {
+      mostrarAviso(err.message || "No se pudo obtener la contraseña.", true);
+      setContrasenaAdmin("");
+    } finally {
+      setVerificando(false);
+    }
+  }
+
   function iniciarCambioContrasena(id) {
     setAviso("");
+    cancelarVerContrasena();
     setEditandoId(id);
     setNuevaContrasena("");
   }
@@ -43,24 +99,25 @@ export default function Usuarios() {
     setNuevaContrasena("");
   }
 
-async function guardarContrasena(id) {
-  if (!nuevaContrasena || nuevaContrasena.length < 8) {
-    mostrarAviso("La nueva contraseña debe tener al menos 8 caracteres.", true);
-    return;
+  async function guardarContrasena(id) {
+    if (!nuevaContrasena || nuevaContrasena.length < 8) {
+      mostrarAviso("La nueva contraseña debe tener al menos 8 caracteres.", true);
+      return;
+    }
+    setGuardando(true);
+    setAviso("");
+    try {
+      // Se envía como OBJETO { id, nuevaContrasena }
+      await usuariosApi.cambiarContrasena({ id, nuevaContrasena });
+      ocultarContrasena(id);
+      mostrarAviso("Contraseña actualizada correctamente.");
+      cancelarCambioContrasena();
+    } catch (err) {
+      mostrarAviso(err.message || "No se pudo actualizar la contraseña.", true);
+    } finally {
+      setGuardando(false);
+    }
   }
-  setGuardando(true);
-  setAviso("");
-  try {
-    // Se envía como OBJETO { id, nuevaContrasena }
-    await usuariosApi.cambiarContrasena({ id, nuevaContrasena });
-    mostrarAviso("Contraseña actualizada correctamente.");
-    cancelarCambioContrasena();
-  } catch (err) {
-    mostrarAviso(err.message || "No se pudo actualizar la contraseña.", true);
-  } finally {
-    setGuardando(false);
-  }
-}
 
   return (
     <AppLayout title="Personal">
@@ -125,9 +182,55 @@ async function guardarContrasena(id) {
                           Cancelar
                         </button>
                       </div>
+                    ) : verId === u.id ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="password"
+                          className="field-input"
+                          placeholder="Tu contraseña de administrador"
+                          autoFocus
+                          value={contrasenaAdmin}
+                          onChange={(e) => setContrasenaAdmin(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && confirmarVerContrasena(u.id)}
+                          style={{ minWidth: 190 }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={verificando}
+                          onClick={() => confirmarVerContrasena(u.id)}
+                        >
+                          {verificando ? "Verificando..." : "Confirmar"}
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={cancelarVerContrasena}>
+                          Cancelar
+                        </button>
+                      </div>
                     ) : (
                       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                        <span>••••••••</span>
+                        {visibles[u.id] !== undefined ? (
+                          <>
+                            <code style={{ userSelect: "all" }}>{visibles[u.id]}</code>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => ocultarContrasena(u.id)}
+                            >
+                              Ocultar
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span>••••••••</span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => iniciarVerContrasena(u.id)}
+                            >
+                              Ver
+                            </button>
+                          </>
+                        )}
                         <button
                           type="button"
                           className="btn btn-secondary"
