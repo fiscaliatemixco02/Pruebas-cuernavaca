@@ -7,9 +7,10 @@ export const ROLES = {
   AIC: "AIC",
   POLICIA: "Policia",
   CONSULTA: "Consulta",
+  CREADOR: "Creador de Cuentas",
 };
 
-const { ADMIN, PERITO, RECEPTOR, AIC, POLICIA, CONSULTA } = ROLES;
+const { ADMIN, PERITO, RECEPTOR, AIC, POLICIA, CONSULTA, CREADOR } = ROLES;
 
 /*
   Roles permitidos por vista. Se usa en App.jsx: <ProtectedRoute roles={VISTAS.estadisticas}>
@@ -33,7 +34,7 @@ const { ADMIN, PERITO, RECEPTOR, AIC, POLICIA, CONSULTA } = ROLES;
 export const MP = "Ministerio Publico";
 
 export const VISTAS = {
-  inicio:         [ADMIN, PERITO, POLICIA, RECEPTOR, AIC, CONSULTA, MP],
+  inicio:         [ADMIN, PERITO, POLICIA, RECEPTOR, AIC, CONSULTA, MP, CREADOR], // CREADOR: Home lo redirige a /crear-cuenta
   notificaciones: [PERITO, POLICIA],
   nuevoRegistro:  [ADMIN, RECEPTOR],
   expedientes:    [ADMIN, RECEPTOR, AIC],
@@ -42,7 +43,7 @@ export const VISTAS = {
   carpetas:       [ADMIN, RECEPTOR, AIC],
   estadisticas:   [ADMIN, CONSULTA],
   usuarios:       [ADMIN],
-  crearCuenta:    [ADMIN],
+  crearCuenta:    [ADMIN, CREADOR],
   bitacora:       [ADMIN],
   porFirmar:      [ADMIN, RECEPTOR, AIC],
   respaldo:       [ADMIN],
@@ -57,6 +58,8 @@ export const VISTAS = {
 };
 export function puedeVer(rol, vista) {
   if (!vista || !VISTAS[vista]) return true;
+  // El Creador de Cuentas no ve "Inicio" en el menú: la ruta "/" solo existe para redirigirlo
+  if (rol === CREADOR && vista === "inicio") return false;
   return VISTAS[vista].includes(rol);
 }
 

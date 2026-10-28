@@ -4,30 +4,43 @@ import AppLayout from "../../reutilizables/AppLayout";
 import { authApi } from "../../api/auth";
 import { peticionesApi } from "../../api/peticiones";
 import { SelectField, TextField } from "../../reutilizables/Field";
+import { useAuth } from "../../context/AuthContext";
 import "../auth/Auth.css";
 
-  const ROLES = [
-    { value: "Administrador", label: "Administrador" },
-    { value: "Receptor", label: "Receptor" },
-    { value: "AIC", label: "AIC" },
-    { value: "Perito", label: "Perito" },
-    { value: "Policia", label: "Policía" },
-    { value: "Consulta", label: "Consulta" },
-    { value: "Ministerio Publico", label: "Ministerio Público" },
-  ];
+const ROLES = [
+  { value: "Administrador", label: "Administrador" },
+  { value: "Receptor", label: "Receptor" },
+  { value: "AIC", label: "AIC" },
+  { value: "Perito", label: "Perito" },
+  { value: "Policia", label: "Policía" },
+  { value: "Consulta", label: "Consulta" },
+  { value: "Ministerio Publico", label: "Ministerio Público" },
+  { value: "Creador de Cuentas", label: "Creador de Cuentas" },
+];
+
+const FORM_VACIO = {
+  usuario: "",
+  contrasena: "",
+  nombre: "",
+  apellidos: "",
+  rol: "",
+  materia: "",
+};
 
 export default function CrearCuenta() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    usuario: "",
-    contrasena: "",
-    nombre: "",
-    apellidos: "",
-    rol: "",
-    materia: "",
-  });
+  const { user } = useAuth();
+  const esCreador = user?.rol === "Creador de Cuentas";
 
-   // Catálogo de materias para el combo
+  // El Creador de Cuentas no puede dar de alta Administradores
+  const rolesDisponibles = esCreador
+    ? ROLES.filter((r) => r.value !== "Administrador")
+    : ROLES;
+
+  const [form, setForm] = useState(FORM_VACIO);
+  const [exito, setExito] = useState("");
+
+  // Catálogo de materias para el combo
   const [materias, setMaterias] = useState([]);
   const [cargandoMaterias, setCargandoMaterias] = useState(true);
 
@@ -39,10 +52,10 @@ export default function CrearCuenta() {
   const [enviandoCodigo, setEnviandoCodigo] = useState(false);
   const [confirmandoCodigo, setConfirmandoCodigo] = useState(false);
   const [avisoVerificacion, setAvisoVerificacion] = useState("");
- 
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
- 
+
   useEffect(() => {
     peticionesApi
       .listarMaterias()
@@ -50,13 +63,12 @@ export default function CrearCuenta() {
       .catch(() => setMaterias([]))
       .finally(() => setCargandoMaterias(false));
   }, []);
- 
+
   // value = nombre para que el backend siga recibiendo `materia` como texto.
-  // Si prefieres mandar el id, cambia value a m.id y ajusta el backend.
   const opcionesMaterias = materias.map((m) => ({ value: m.nombre, label: m.nombre }));
- 
+
   const esPerito = form.rol === "Perito";
- 
+
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
     if (field === "usuario" && value !== correoVerificado) {
@@ -65,7 +77,7 @@ export default function CrearCuenta() {
       setCodigo("");
     }
   }
- 
+
   function handleRolChange(value) {
     setForm((f) => ({
       ...f,
@@ -74,7 +86,7 @@ export default function CrearCuenta() {
       materia: value === "Perito" ? f.materia : "",
     }));
   }
- 
+
   async function handleEnviarCodigo() {
     setAvisoVerificacion("");
     setError("");
@@ -93,7 +105,7 @@ export default function CrearCuenta() {
       setEnviandoCodigo(false);
     }
   }
- 
+
   async function handleConfirmarCodigo() {
     setAvisoVerificacion("");
     if (!codigo.trim()) {
@@ -112,10 +124,11 @@ export default function CrearCuenta() {
       setConfirmandoCodigo(false);
     }
   }
- 
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setExito("");
     if (!form.usuario || !form.contrasena || !form.nombre || !form.apellidos || !form.rol) {
       setError("Usuario, contraseña, nombre, apellidos y rol son obligatorios.");
       return;
@@ -131,14 +144,24 @@ export default function CrearCuenta() {
     setLoading(true);
     try {
       await authApi.registrar(form);
-      navigate("/usuarios");
+      if (esCreador) {
+        // Se queda en la misma vista lista para crear otra cuenta
+        setExito(`Cuenta creada para ${form.usuario.trim()}.`);
+        setForm(FORM_VACIO);
+        setEstadoVerificacion("");
+        setCorreoVerificado("");
+        setCodigo("");
+        setAvisoVerificacion("");
+      } else {
+        navigate("/usuarios");
+      }
     } catch (err) {
       setError(err.message || "No se pudo crear la cuenta");
     } finally {
       setLoading(false);
     }
   }
- 
+
   return (
     <AppLayout title="Crear cuenta">
       <div className="auth-card auth-card-wide" style={{ margin: "0 auto" }}>
@@ -146,10 +169,11 @@ export default function CrearCuenta() {
           <h1>Crear cuenta</h1>
           <p>REGISTRA LOS DATOS DEL NUEVO USUARIO</p>
         </div>
- 
+
         <form className="auth-form" onSubmit={handleSubmit}>
           {error ? <div className="status-banner error">{error}</div> : null}
- 
+          {exito ? <div className="status-banner success">{exito}</div> : null}
+
           <div>
             <TextField
               label="Usuario (correo)"
@@ -178,7 +202,7 @@ export default function CrearCuenta() {
                 </span>
               ) : null}
             </div>
- 
+
             {estadoVerificacion === "enviado" ? (
               <div className="form-grid two-col" style={{ marginTop: 12, alignItems: "end" }}>
                 <TextField
@@ -199,14 +223,14 @@ export default function CrearCuenta() {
                 </button>
               </div>
             ) : null}
- 
+
             {avisoVerificacion ? (
               <p className="field-hint" style={{ marginTop: 8 }}>
                 {avisoVerificacion}
               </p>
             ) : null}
           </div>
- 
+
           <TextField
             label="Contraseña"
             type="password"
@@ -228,7 +252,7 @@ export default function CrearCuenta() {
           />
           <SelectField
             label="Rol"
-            options={ROLES}
+            options={rolesDisponibles}
             value={form.rol}
             onChange={(e) => handleRolChange(e.target.value)}
             required
@@ -245,7 +269,7 @@ export default function CrearCuenta() {
             disabled={!esPerito || cargandoMaterias}
             required={esPerito}
           />
- 
+
           <div className="btn-row">
             <button
               className="btn btn-primary"
@@ -256,12 +280,13 @@ export default function CrearCuenta() {
             </button>
           </div>
           <span className="field-hint">*Campo obligatorio*</span>
-          <p className="auth-alt">
-            <Link to="/usuarios">Cancelar y volver a Personal</Link>
-          </p>
+          {!esCreador ? (
+            <p className="auth-alt">
+              <Link to="/usuarios">Cancelar y volver a Personal</Link>
+            </p>
+          ) : null}
         </form>
       </div>
     </AppLayout>
   );
 }
-

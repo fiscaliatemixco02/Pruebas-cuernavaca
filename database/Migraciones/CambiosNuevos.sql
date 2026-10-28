@@ -24,3 +24,7 @@ CREATE TABLE IF NOT EXISTS documento_policial_archivos (
 
 CREATE INDEX IF NOT EXISTS idx_documento_policial_archivos_doc
     ON documento_policial_archivos(documento_id);
+
+
+INSERT INTO roles (nom_rol) VALUES ('Creador de Cuentas')
+ON CONFLICT (nom_rol) DO NOTHING;

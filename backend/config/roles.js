@@ -15,9 +15,10 @@ const ROLES = {
   POLICIA: 'Policia',
   CONSULTA: 'Consulta',
   MP: 'Ministerio Publico',
+  CREADOR: 'Creador de Cuentas',
 };
 
-const { ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA, MP } = ROLES;
+const { ADMIN, RECEPTOR, AIC, PERITO, POLICIA, CONSULTA, MP, CREADOR } = ROLES;
 
 // ---------- Grupos ----------
 // Reciben los llamados, asignan y firman las entregas
@@ -58,6 +59,10 @@ const PERMISOS = {
   verUsuarios:   [ADMIN, RECEPTOR, AIC],
   verAsignables: [ADMIN, RECEPTOR, AIC],                               // peritos y policías disponibles
 
+  // Alta de cuentas: el Administrador y el rol dedicado "Creador de Cuentas"
+  crearCuentas: [ADMIN, CREADOR],
+  verMateriasAlta: [ADMIN, CREADOR],   // el combo de materias del formulario de alta
+
   // Solo administrador
   administrar: [ADMIN], // bitácora, crear / eliminar carpetas, respaldo, etc.
   estadisticas: [ADMIN, CONSULTA],
@@ -66,6 +71,9 @@ const PERMISOS = {
 // ---------- Ayudas ----------
 const esAsignado = (rol) => ASIGNADOS.includes(rol);
 const esReceptor = (rol) => RECEPTORES.includes(rol);
+
+// Roles que el Creador de Cuentas NO puede asignar (evita escalar privilegios)
+const ROLES_NO_ASIGNABLES_POR_CREADOR = [ADMIN, CREADOR];
 
 // A quién le corresponde firmar cada tipo de asignado:
 //   Receptor -> lo de peritos, AIC -> lo de policías, Administrador (null) -> todo
@@ -83,4 +91,5 @@ module.exports = {
   esAsignado,
   esReceptor,
   rolAsignadoPara,
+  ROLES_NO_ASIGNABLES_POR_CREADOR,
 };
