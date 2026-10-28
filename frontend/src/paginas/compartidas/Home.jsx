@@ -6,6 +6,11 @@ import "./Home.css";
 export default function Home() {
   const { user } = useAuth();
 
+  // El Creador de Cuentas solo tiene la vista de crear cuenta
+  if (user?.rol === "Creador de Cuentas") {
+    return <Navigate to="/crear-cuenta" replace />;
+  }
+
   return (
     <AppLayout>
       <div className="home-hero">

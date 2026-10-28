@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const pool = require('../db');
 const { enviarCorreoCodigo } = require('../mailer');
 const { verificarToken, requerirRol } = require('../middleware/auth');
+const { ROLES, PERMISOS, ROLES_NO_ASIGNABLES_POR_CREADOR } = require('../config/roles');
 
 const router = express.Router();
 const ADMIN = 'Administrador';
@@ -132,10 +133,10 @@ router.put('/cambiar-contrasena', verificarToken, async (req, res) => {
   }
 });
 
-// A partir de aquí: solo el administrador crea cuentas.
+// A partir de aquí: crean cuentas el Administrador y el Creador de Cuentas.
 
 // Generar y enviar código de verificación por correo
-router.post('/enviar-codigo', verificarToken, requerirRol(ADMIN), async (req, res) => {
+router.post('/enviar-codigo', verificarToken, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
   const correo = normalizarCorreo(req.body.correo);
   if (!correo) {
     return res.status(400).json({ error: 'El correo es obligatorio' });
@@ -170,7 +171,7 @@ router.post('/enviar-codigo', verificarToken, requerirRol(ADMIN), async (req, re
 });
 
 // Confirmar código de verificación
-router.post('/confirmar-codigo', verificarToken, requerirRol(ADMIN), async (req, res) => {
+router.post('/confirmar-codigo', verificarToken, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
   const correo = normalizarCorreo(req.body.correo);
   const { codigo } = req.body;
 
@@ -208,7 +209,7 @@ router.post('/confirmar-codigo', verificarToken, requerirRol(ADMIN), async (req,
 });
 
 // Crear la cuenta si el correo fue verificado
-router.post('/registro', verificarToken, requerirRol(ADMIN), async (req, res) => {
+router.post('/registro', verificarToken, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
   const { contrasena, nombre, apellidos, rol, materia } = req.body;
   const correo = normalizarCorreo(req.body.usuario || req.body.correo);
 
@@ -220,6 +221,11 @@ router.post('/registro', verificarToken, requerirRol(ADMIN), async (req, res) =>
 
   if (String(contrasena).length < 8) {
     return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+  }
+
+  // El Creador de Cuentas no puede crear Administradores ni otros Creadores
+  if (req.usuario.rol === ROLES.CREADOR && ROLES_NO_ASIGNABLES_POR_CREADOR.includes(rol)) {
+    return res.status(403).json({ error: 'No tienes permiso para crear cuentas con ese rol' });
   }
 
   const client = await pool.connect();

@@ -99,7 +99,7 @@ app.get('/api/usuarios', verificarToken, requerirRol(...PERMISOS.verUsuarios), a
 
 // Catálogo de materias. Con ?llamado_id=X devuelve solo las de ese llamado
 // (si el llamado no tiene materias configuradas, devuelve todas).
-app.get('/api/materias', verificarToken, requerirRol(...PERMISOS.verCatalogos), async (req, res) => {
+app.get('/api/materias', verificarToken, requerirRol(...PERMISOS.verCatalogos, ...PERMISOS.verMateriasAlta), async (req, res) => {
   const { llamado_id } = req.query;
   try {
     if (llamado_id && /^\d+$/.test(llamado_id)) {
