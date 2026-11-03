@@ -1,6 +1,6 @@
 -- ============================================================
 -- BASE DE DATOS - SISTEMA DE PETICIONES
--- PostgreSQL
+-- PostgreSQL  (esquema limpio, para crear desde cero)
 -- ============================================================
 
 
@@ -59,34 +59,11 @@ COMMENT ON TABLE materias IS
 
 INSERT INTO materias (nombre)
 VALUES
-    ('Odontología forense y social'),
-    ('Antropología'),
-    ('Incendios y explosivos'),
-    ('Traducción'),
-    ('Química'),
-    ('Genética'),
-    ('Balística'),
-    ('Psicología'),
-    ('Valuación'),
-    ('Arquitectura'),
-    ('Mecánica identificativa'),
-    ('Tránsito terrestre'),
-    ('Criminalística (diversos y homicidios)'),
-    ('Lofoscopía'),
-    ('Fotografía'),
-    ('Informática'),
-    ('Grafoscopía'),
-    ('Criminalística de laboratorio'),
-    ('Zootecnia y Agronomía'),
-    ('Contabilidad'),
-    ('Identificación humana'),
-    ('Antropología social'),
-    ('Retrato hablado'),
-    ('Mecánica identificativa de bienes asegurados'),
     ('Criminalistica'),
     ('Informatica'),
     ('Medicina legal'),
-    ('Acústica')
+    ('Acústica forense'),
+    ('Psicología')
 ON CONFLICT (nombre) DO NOTHING;
 
 
@@ -132,12 +109,7 @@ CREATE TABLE IF NOT EXISTS verificaciones_correo (
 -- 6. USUARIO ADMINISTRADOR DE PRUEBA
 -- ============================================================
 
-INSERT INTO usuarios (
-    nombre,
-    correo,
-    rol_id,
-    verificado
-)
+INSERT INTO usuarios (nombre, correo, rol_id, verificado)
 SELECT
     'Prueba Admin',
     'admin@test.com',
@@ -191,13 +163,7 @@ COMMENT ON TABLE llamados IS
 
 INSERT INTO llamados (codigo, es_automatico)
 VALUES
-    ('FM', TRUE),
-    ('FMT', TRUE),
-    ('FMM', TRUE),
-    ('FMBA', TRUE),
-    ('FMG', FALSE),
-    ('SUIP', TRUE),
-    ('FMAP', FALSE)
+    ('SP', TRUE)
 ON CONFLICT (codigo) DO NOTHING;
 
 
@@ -230,41 +196,12 @@ CREATE TABLE IF NOT EXISTS llamado_materias (
     PRIMARY KEY (llamado_id, materia_id)
 );
 
-
+-- SP tiene todas las materias
 INSERT INTO llamado_materias (llamado_id, materia_id)
-SELECT
-    l.id,
-    m.id
-FROM (
-    VALUES
-        ('FM',   'Criminalística (diversos y homicidios)'),
-        ('FM',   'Química'),
-        ('FM',   'Odontología forense y social'),
-        ('FM',   'Incendios y explosivos'),
-        ('FM',   'Antropología'),
-        ('FM',   'Traducción'),
-        ('FM',   'Valuación'),
-        ('FM',   'Arquitectura'),
-        ('FM',   'Psicología'),
-        ('FM',   'Lofoscopía'),
-        ('FM',   'Fotografía'),
-        ('FM',   'Informática'),
-        ('FM',   'Contabilidad'),
-        ('FM',   'Grafoscopía'),
-        ('FM',   'Balística'),
-        ('FM',   'Criminalística de laboratorio'),
-        ('FM',   'Identificación humana'),
-        ('FM',   'Antropología social'),
-        ('FM',   'Retrato hablado'),
-        ('FMG',  'Genética'),
-        ('FMM',  'Mecánica identificativa'),
-        ('FMT',  'Tránsito terrestre'),
-        ('FMBA', 'Mecánica identificativa de bienes asegurados')
-) AS v(codigo, materia)
-JOIN llamados l
-    ON l.codigo = v.codigo
-JOIN materias m
-    ON m.nombre = v.materia
+SELECT l.id, m.id
+FROM llamados l
+CROSS JOIN materias m
+WHERE l.codigo = 'SP'
 ON CONFLICT DO NOTHING;
 
 
@@ -343,12 +280,8 @@ DECLARE
     v_siguiente INTEGER;
 BEGIN
 
-    SELECT
-        codigo,
-        es_automatico
-    INTO
-        v_codigo,
-        v_automatico
+    SELECT codigo, es_automatico
+    INTO v_codigo, v_automatico
     FROM llamados
     WHERE id = NEW.llamado_id;
 
@@ -362,20 +295,11 @@ BEGIN
 
     IF v_automatico THEN
 
-        INSERT INTO contador_llamados (
-            llamado_id,
-            anio,
-            ultimo_numero
-        )
-        VALUES (
-            NEW.llamado_id,
-            v_anio,
-            1
-        )
+        INSERT INTO contador_llamados (llamado_id, anio, ultimo_numero)
+        VALUES (NEW.llamado_id, v_anio, 1)
         ON CONFLICT (llamado_id, anio)
         DO UPDATE SET
-            ultimo_numero =
-                contador_llamados.ultimo_numero + 1
+            ultimo_numero = contador_llamados.ultimo_numero + 1
         RETURNING ultimo_numero
         INTO v_siguiente;
 
@@ -440,8 +364,7 @@ SELECT
     p.con_detenido,
 
     CASE
-        WHEN p.con_detenido
-            THEN 'CON DETENIDO'
+        WHEN p.con_detenido THEN 'CON DETENIDO'
         ELSE 'SIN DETENIDO'
     END AS estatus_detenido,
 
@@ -466,21 +389,11 @@ SELECT
     p.firmado_en
 
 FROM peticiones p
-
-JOIN llamados l
-    ON l.id = p.llamado_id
-
-JOIN materias m
-    ON m.id = p.materia_id
-
-JOIN usuarios u_rec
-    ON u_rec.id = p.receptor_id
-
-LEFT JOIN usuarios u_per
-    ON u_per.id = p.perito_id
-
-LEFT JOIN usuarios u_ent
-    ON u_ent.id = p.quien_recibe_id;
+JOIN llamados l ON l.id = p.llamado_id
+JOIN materias m ON m.id = p.materia_id
+JOIN usuarios u_rec ON u_rec.id = p.receptor_id
+LEFT JOIN usuarios u_per ON u_per.id = p.perito_id
+LEFT JOIN usuarios u_ent ON u_ent.id = p.quien_recibe_id;
 
 
 -- ============================================================
@@ -505,7 +418,6 @@ CREATE TABLE IF NOT EXISTS bitacora (
     fecha_hora TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-
 CREATE INDEX IF NOT EXISTS idx_bitacora_usuario_fecha
     ON bitacora(us_id, fecha_hora DESC);
 
@@ -522,13 +434,7 @@ CREATE TABLE IF NOT EXISTS entregas (
         ON DELETE CASCADE,
 
     tipo TEXT NOT NULL
-        CHECK (
-            tipo IN (
-                'dictamen',
-                'informe',
-                'requerimiento'
-            )
-        ),
+        CHECK (tipo IN ('dictamen', 'informe', 'requerimiento')),
 
     archivo_nombre TEXT NOT NULL,
     archivo_ruta TEXT NOT NULL,
@@ -541,8 +447,7 @@ CREATE TABLE IF NOT EXISTS entregas (
 
 
 -- ============================================================
--- 19. ENTREGAS DE ARCHIVOS
--- Permite varios PDF por petición
+-- 19. ENTREGAS DE ARCHIVOS (varios PDF por petición)
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS entrega_archivos (
@@ -555,7 +460,6 @@ CREATE TABLE IF NOT EXISTS entrega_archivos (
     tipo VARCHAR(20) NOT NULL,
 
     archivo_nombre VARCHAR(255) NOT NULL,
-
     archivo_ruta VARCHAR(500) NOT NULL,
 
     subido_por INTEGER
@@ -564,28 +468,15 @@ CREATE TABLE IF NOT EXISTS entrega_archivos (
     subido_en TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-
 CREATE INDEX IF NOT EXISTS idx_entrega_archivos_peticion
     ON entrega_archivos(peticion_id);
 
-
 -- Copiar entregas anteriores a la nueva tabla
-
 INSERT INTO entrega_archivos (
-    peticion_id,
-    tipo,
-    archivo_nombre,
-    archivo_ruta,
-    subido_por,
-    subido_en
+    peticion_id, tipo, archivo_nombre, archivo_ruta, subido_por, subido_en
 )
 SELECT
-    e.peticion_id,
-    e.tipo,
-    e.archivo_nombre,
-    e.archivo_ruta,
-    e.subido_por,
-    e.subido_en
+    e.peticion_id, e.tipo, e.archivo_nombre, e.archivo_ruta, e.subido_por, e.subido_en
 FROM entregas e
 WHERE NOT EXISTS (
     SELECT 1
@@ -617,7 +508,6 @@ CREATE TABLE IF NOT EXISTS notificaciones (
 
     creada_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 
 CREATE INDEX IF NOT EXISTS idx_notificaciones_usuario
     ON notificaciones(us_id, leida, creada_en DESC);
@@ -665,15 +555,9 @@ SELECT
     u.nombre AS nombre_mp
 
 FROM solicitudes_mp s
-
-JOIN materias m
-    ON m.id = s.materia_id
-
-JOIN usuarios u
-    ON u.id = s.mp_id
-
-LEFT JOIN peticiones p
-    ON p.id = s.peticion_id;
+JOIN materias m ON m.id = s.materia_id
+JOIN usuarios u ON u.id = s.mp_id
+LEFT JOIN peticiones p ON p.id = s.peticion_id;
 
 
 -- ============================================================
@@ -692,25 +576,14 @@ CREATE TABLE IF NOT EXISTS solicitud_mp_archivos (
     ruta VARCHAR(500) NOT NULL
 );
 
-
 CREATE INDEX IF NOT EXISTS idx_solicitud_mp_archivos_solicitud
     ON solicitud_mp_archivos(solicitud_id);
 
-
 -- Copiar archivos existentes
-
-INSERT INTO solicitud_mp_archivos (
-    solicitud_id,
-    nombre_original,
-    ruta
-)
+INSERT INTO solicitud_mp_archivos (solicitud_id, nombre_original, ruta)
 SELECT
     s.id,
-    REGEXP_REPLACE(
-        s.archivo_pdf,
-        '^.*[\\/]',
-        ''
-    ),
+    REGEXP_REPLACE(s.archivo_pdf, '^.*[\\/]', ''),
     s.archivo_pdf
 FROM solicitudes_mp s
 WHERE s.archivo_pdf IS NOT NULL
