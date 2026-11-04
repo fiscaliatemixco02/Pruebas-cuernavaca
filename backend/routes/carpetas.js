@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { verificarToken, requerirRol } = require('../middleware/auth');
 const { PERMISOS } = require('../config/roles');
+const { texto, ErrorValidacion } = require('../utils/validar');
 
 const router = express.Router();
 
@@ -46,15 +47,18 @@ router.get('/:id/solicitudes', requerirRol(...PERMISOS.solicitudesDeCarpeta), as
 
 // Crear carpeta nueva (solo Administrador)
 router.post('/', requerirRol(...PERMISOS.administrar), async (req, res) => {
-  const { numero_carpeta } = req.body;
-  if (!numero_carpeta || !numero_carpeta.trim()) {
-    return res.status(400).json({ error: 'El número de carpeta es obligatorio' });
+  let numero_carpeta;
+  try {
+    numero_carpeta = texto(req.body.numero_carpeta, { campo: 'El número de carpeta', max: 50, requerido: true });
+  } catch (e) {
+    if (e instanceof ErrorValidacion) return res.status(400).json({ error: 'El número de carpeta es obligatorio y debe tener máximo 50 caracteres' });
+    throw e;
   }
 
   try {
     const resultado = await pool.query(
       `INSERT INTO carpetas (numero_carpeta) VALUES ($1) RETURNING id, numero_carpeta`,
-      [numero_carpeta.trim()]
+      [numero_carpeta]
     );
     res.status(201).json(resultado.rows[0]);
   } catch (error) {

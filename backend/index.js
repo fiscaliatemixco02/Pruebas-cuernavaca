@@ -1,15 +1,29 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const pool = require('./db');
+const { validarEntorno } = require('./config/entorno');
+validarEntorno();
+
 const authRoutes = require('./routes/auth');
 const estadisticasRoutes = require('./routes/estadisticas');
-const cors = require('cors');
 const carpetasRoutes = require('./routes/carpetas');
 const peticionesRoutes = require('./routes/peticiones');
 const solicitudesMpRoutes = require('./routes/solicitudesMp');
 const ordenesInvestigacionRoutes = require('./routes/ordenesInvestigacion');
 const crearRouterDocumentos = require('./routes/documentosPoliciales');
 const { verificarToken, requerirRol } = require('./middleware/auth');
+const {
+  cabecerasSeguras,
+  sinCache,
+  forzarHttps,
+  corsOpciones,
+  limpiarBody,
+  avisarProxy,
+  noEncontrado,
+  manejarErrores,
+} = require('./middleware/seguridad');
+const { limitadores } = require('./middleware/limitadores');
 const { ROLES, PERMISOS } = require('./config/roles');
 const respaldoRoutes = require('./routes/respaldo');
 const app = express();
@@ -17,12 +31,24 @@ const PORT = process.env.PORT || 3000;
 // Los nombres de rol y los permisos viven en config/roles.js
 const { RECEPTOR, AIC, PERITO, POLICIA } = ROLES;
 
-app.use(express.json());
+// ---------- Seguridad general ----------
+app.disable('x-powered-by');
 
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
+// Detrás de un proxy (nginx, Render, Railway, Cloudflare...) define TRUST_PROXY (p. ej. 1) en .env
+// para que req.ip sea la IP real del usuario y no la del proxy.
+if (process.env.TRUST_PROXY) {
+  const t = process.env.TRUST_PROXY;
+  app.set('trust proxy', /^\d+$/.test(t) ? Number(t) : t === 'true' ? true : t === 'false' ? false : t);
+}
+
+app.use(cabecerasSeguras);
+app.use(avisarProxy);
+app.use(forzarHttps);
+app.use(cors(corsOpciones));
+app.use('/api', sinCache);
+app.use(express.json({ limit: '200kb' }));
+app.use(limpiarBody);
+app.use('/api', limitadores.general);
 
 app.get('/', (req, res) => {
   res.send('Servidor funcionando');
@@ -139,15 +165,17 @@ app.get('/api/peritos', verificarToken, requerirRol(...PERMISOS.verAsignables), 
   }
 
   if (rolSolicitante !== AIC) {
-    let cond = `r.nom_rol = '${PERITO}'`;
+    params.push(PERITO);
+    let cond = `r.nom_rol = $${params.length}`;
     if (materia_id !== undefined && materia_id !== '') {
-      params.push(materia_id);
+      params.push(Number(materia_id));
       cond += ` AND u.materia_id = $${params.length}`;
     }
     condiciones.push(`(${cond})`);
   }
   if (rolSolicitante !== RECEPTOR) {
-    condiciones.push(`r.nom_rol = '${POLICIA}'`);
+    params.push(POLICIA);
+    condiciones.push(`r.nom_rol = $${params.length}`);
   }
 
   try {
@@ -189,6 +217,10 @@ app.get('/api/bitacora', verificarToken, requerirRol(...PERMISOS.administrar), a
     res.status(500).json({ error: 'Error al consultar bitácora' });
   }
 });
+
+// Siempre al final: ruta inexistente y errores no controlados (sin filtrar detalles al cliente)
+app.use(noEncontrado);
+app.use(manejarErrores);
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

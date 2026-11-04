@@ -3,6 +3,7 @@ import AppLayout from "../../reutilizables/AppLayout";
 import { SelectField } from "../../reutilizables/Field";
 import { peticionesApi } from "../../api/peticiones";
 import { estadisticasApi } from "../../api/estadisticas";
+import { BASE_URL as API_URL } from "../../api/client";
 import ReporteEstadisticoPDF from "../../reutilizables/ReporteEstadisticoPDF";
 import "./Estadisticas.css";
 
@@ -18,9 +19,6 @@ const MESES = [
   "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-// AJUSTA estas dos líneas a como lo hace tu proyecto (mira tu api/client.js)
-const API_URL = "http://localhost:3000/api";
-const obtenerToken = () => localStorage.getItem("token");
 
 export default function Estadisticas() {
   const [materias, setMaterias] = useState([]);
@@ -107,7 +105,7 @@ export default function Estadisticas() {
     try {
       const resp = await fetch(
         `${API_URL}/peticiones/reporte-mensual?mes=${repMes}&anio=${repAnio}`,
-        { headers: { Authorization: `Bearer ${obtenerToken()}` } }
+        { credentials: "include", headers: { "X-Requested-With": "XMLHttpRequest" } }
       );
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));

@@ -3,7 +3,9 @@ import { authApi } from "../api/auth";
 
 const AuthContext = createContext(null);
 
-const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+// El modo demo salta el login SOLO en el navegador (no da acceso a datos reales), pero en una
+// versión publicada (build de producción) se ignora para que nadie vea pantallas de administrador sin sesión.
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true" && !import.meta.env.PROD;
 const DEMO_USER = {
   id: 0,
   usuario: "demo",
@@ -26,12 +28,13 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function login(usuario, contrasena) {
+  // `extra` lleva los datos anti-bots del formulario ({ turnstileToken, sitio_web })
+  async function login(usuario, contrasena, extra) {
     if (DEMO_MODE) {
       setUser(DEMO_USER);
       return DEMO_USER;
     }
-    const u = await authApi.login(usuario, contrasena);
+    const u = await authApi.login(usuario, contrasena, extra);
     setUser(u);
     return u;
   }

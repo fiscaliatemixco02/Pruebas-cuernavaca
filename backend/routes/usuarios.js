@@ -1,11 +1,12 @@
 // routes/usuarios.js
 const express = require('express');
 const pool = require('../db');
-const { verificarToken } = require('../middleware/auth');
+const { verificarToken, requerirRol } = require('../middleware/auth');
+const { PERMISOS } = require('../config/roles');
 
 const router = express.Router();
 
-router.get('/', verificarToken, async (req, res) => {
+router.get('/', verificarToken, requerirRol(...PERMISOS.verUsuarios), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.nombre, u.correo, r.nom_rol AS rol, m.nombre AS materia

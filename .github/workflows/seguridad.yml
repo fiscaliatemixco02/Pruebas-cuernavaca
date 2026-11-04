@@ -1,0 +1,41 @@
+name: Seguridad
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 13 * * 1' # cada lunes: aparecen vulnerabilidades nuevas aunque no cambies código
+
+jobs:
+  auditoria-dependencias:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        carpeta: [backend, frontend]
+    defaults:
+      run:
+        working-directory: ${{ matrix.carpeta }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.carpeta }}/package-lock.json
+      - run: npm ci
+      # Falla si hay vulnerabilidades altas o críticas en lo que se usa en producción
+      - run: npm audit --omit=dev --audit-level=high
+
+  pruebas-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node scripts/pruebas-seguridad.js

@@ -5,6 +5,9 @@ const multer = require('multer');
 const pool = require('../db');
 const { requerirRol } = require('../middleware/auth');
 const { ROLES, PERMISOS } = require('../config/roles');
+const { limitadores } = require('../middleware/limitadores');
+const { todosSonPdf } = require('../utils/pdf');
+const { entero, texto, ErrorValidacion } = require('../utils/validar');
 
 const router = express.Router();
 
@@ -49,7 +52,7 @@ async function solicitudAccesible(req, res) {
 }
 
 // MP crea una solicitud con uno o varios PDF
-router.post('/', requerirRol(...PERMISOS.enviarSolicitud), (req, res) => {
+router.post('/', requerirRol(...PERMISOS.enviarSolicitud), limitadores.subidas, (req, res) => {
   upload.array('pdfs', MAX_ARCHIVOS)(req, res, async (err) => {
     const archivos = req.files || [];
     const descartar = () => archivos.forEach((f) => fs.unlink(f.path, () => {}));
@@ -64,11 +67,25 @@ router.post('/', requerirRol(...PERMISOS.enviarSolicitud), (req, res) => {
     if (archivos.length === 0) {
       return res.status(400).json({ error: 'Debes adjuntar al menos un PDF.' });
     }
+    // El Content-Type lo manda el navegador y se puede falsificar: se revisa el contenido real
+    if (!todosSonPdf(archivos)) {
+      descartar();
+      return res.status(400).json({ error: 'Solo se permiten archivos PDF' });
+    }
 
-    const { numero_carpeta, materia_id, breve_resena } = req.body;
-    if (!numero_carpeta || !materia_id || !breve_resena) {
+    if (!req.body.numero_carpeta || !req.body.materia_id || !req.body.breve_resena) {
       descartar();
       return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+    }
+    let numero_carpeta, materia_id, breve_resena;
+    try {
+      numero_carpeta = texto(req.body.numero_carpeta, { campo: 'La carpeta', max: 50, requerido: true });
+      materia_id = entero(req.body.materia_id, { campo: 'La materia', requerido: true });
+      breve_resena = texto(req.body.breve_resena, { campo: 'La breve reseña', max: 5000, requerido: true });
+    } catch (e) {
+      descartar();
+      if (e instanceof ErrorValidacion) return res.status(400).json({ error: e.message });
+      throw e;
     }
 
     const client = await pool.connect();
@@ -275,8 +292,14 @@ router.get('/:id/pdf', requerirRol(...PERMISOS.verSolicitudes), async (req, res)
 
 // El receptor marca la solicitud como atendida y la liga a la petición creada
 router.put('/:id/atender', requerirRol(...PERMISOS.atenderSolicitud), async (req, res) => {
-  const { peticion_id } = req.body;
-  if (!peticion_id) return res.status(400).json({ error: 'Falta peticion_id' });
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Id inválido' });
+  if (!req.body.peticion_id) return res.status(400).json({ error: 'Falta peticion_id' });
+  let peticion_id;
+  try {
+    peticion_id = entero(req.body.peticion_id, { campo: 'peticion_id', requerido: true });
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
   try {
     const r = await pool.query(
       `UPDATE solicitudes_mp SET estado = 'ATENDIDA', peticion_id = $1

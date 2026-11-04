@@ -18,6 +18,8 @@ const multer = require('multer');
 const pool = require('../db');
 const { requerirRol } = require('../middleware/auth');
 const { ROLES } = require('../config/roles');
+const { limitadores } = require('../middleware/limitadores');
+const { todosSonPdf } = require('../utils/pdf');
 
 const { ADMIN, POLICIA } = ROLES;
 
@@ -73,7 +75,7 @@ function crearRouter(tipo, permisos) {
   }
 
   // Crear: carpeta + iniciales + uno o varios PDF
-  router.post('/', requerirRol(...permisos.subir), (req, res) => {
+  router.post('/', requerirRol(...permisos.subir), limitadores.subidas, (req, res) => {
     upload.array('pdfs', MAX_ARCHIVOS)(req, res, async (err) => {
       const archivos = req.files || [];
       const descartar = () => archivos.forEach((f) => fs.unlink(f.path, () => {}));
@@ -84,6 +86,12 @@ function crearRouter(tipo, permisos) {
         if (err.code === 'LIMIT_FILE_SIZE') msg = 'Un PDF supera los 15 MB';
         if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = `Máximo ${MAX_ARCHIVOS} archivos por envío`;
         return res.status(400).json({ error: msg });
+      }
+
+      // El Content-Type lo manda el navegador y se puede falsificar: se revisa el contenido real
+      if (!todosSonPdf(archivos)) {
+        descartar();
+        return res.status(400).json({ error: 'Solo se permiten archivos PDF' });
       }
 
       const carpeta = String(req.body.numero_carpeta || '').trim().toUpperCase();
