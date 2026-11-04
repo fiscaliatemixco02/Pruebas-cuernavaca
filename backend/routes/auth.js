@@ -7,6 +7,10 @@ const { enviarCorreoCodigo } = require('../mailer');
 const { verificarToken, requerirRol } = require('../middleware/auth');
 const { ROLES, PERMISOS, ROLES_NO_ASIGNABLES_POR_CREADOR } = require('../config/roles');
 const { cifrar, descifrar } = require('../utils/cifrado');
+const { NOMBRE_COOKIE, DURACION_SEG, OPCIONES_COOKIE } = require('../config/sesion');
+const { ponerCookie } = require('../utils/cookies');
+const { limitadores } = require('../middleware/limitadores');
+const { bloquearAutomatizacion, verificarTurnstile } = require('../middleware/bots');
 
 const router = express.Router();
 const ADMIN = 'Administrador';
@@ -25,56 +29,102 @@ function datosUsuario(u) {
   };
 }
 
-// Login por correo y contraseña
-router.post('/login', async (req, res) => {
-  const correo = normalizarCorreo(req.body.correo || req.body.usuario);
-  const { contrasena } = req.body;
+// Hash de relleno: si el correo no existe se compara contra este, para que responder tarde o
+// temprano no delate qué correos tienen cuenta.
+const HASH_RELLENO = bcrypt.hashSync('relleno-para-igualar-tiempos', 10);
 
-  if (!correo || !contrasena) {
-    return res.status(400).json({ error: 'Correo y contraseña son obligatorios' });
-  }
+// Login por correo y contraseña. La sesión se entrega en una cookie HttpOnly (no en el cuerpo).
+router.post(
+  '/login',
+  limitadores.loginIp,
+  bloquearAutomatizacion,
+  verificarTurnstile,
+  async (req, res) => {
+    const correo = normalizarCorreo(req.body.correo || req.body.usuario);
+    const { contrasena } = req.body;
 
-  try {
-    const resultado = await pool.query(
-      `SELECT u.id, u.nombre, u.correo, u.password_hash, u.verificado,
-              r.nom_rol AS rol, m.nombre AS materia
-       FROM usuarios u
-       JOIN roles r ON r.id = u.rol_id
-       LEFT JOIN materias m ON m.id = u.materia_id
-       WHERE LOWER(u.correo) = $1`,
-      [correo]
-    );
-
-    if (resultado.rows.length === 0) {
+    if (!correo || !contrasena) {
+      return res.status(400).json({ error: 'Correo y contraseña son obligatorios' });
+    }
+    if (typeof contrasena !== 'string' || correo.length > 150 || contrasena.length > 200) {
       return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
     }
 
-    const usuario = resultado.rows[0];
-
-    if (!usuario.verificado) {
-      return res.status(401).json({ error: 'La cuenta no ha sido verificada' });
-    }
-
-    if (!usuario.password_hash) {
-      return res.status(401).json({ error: 'Esta cuenta no tiene contraseña configurada' });
-    }
-
-    const coincide = await bcrypt.compare(contrasena, usuario.password_hash);
-    if (!coincide) {
-      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
-    }
-
-    const token = jwt.sign(
-      { id: usuario.id, rol: usuario.rol, nombre: usuario.nombre },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+    // Límite de intentos fallidos: misma IP + mismo correo, mismo correo (cualquier IP) y misma IP
+    const llaveCuentaIp = `${req.ip}|${correo}`;
+    const espera = Math.max(
+      limitadores.loginFallosCuentaIp.bloqueado(llaveCuentaIp),
+      limitadores.loginFallosCuenta.bloqueado(correo),
+      limitadores.loginFallosIp.bloqueado(req.ip)
     );
+    if (espera > 0) {
+      res.setHeader('Retry-After', String(espera));
+      return res
+        .status(429)
+        .json({ error: 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo' });
+    }
+    const registrarFallo = () => {
+      limitadores.loginFallosCuentaIp.fallo(llaveCuentaIp);
+      limitadores.loginFallosCuenta.fallo(correo);
+      limitadores.loginFallosIp.fallo(req.ip);
+    };
 
-    res.json({ token, usuario: datosUsuario(usuario) });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al iniciar sesión' });
+    try {
+      const resultado = await pool.query(
+        `SELECT u.id, u.nombre, u.correo, u.password_hash, u.verificado,
+                r.nom_rol AS rol, m.nombre AS materia
+         FROM usuarios u
+         JOIN roles r ON r.id = u.rol_id
+         LEFT JOIN materias m ON m.id = u.materia_id
+         WHERE LOWER(u.correo) = $1`,
+        [correo]
+      );
+
+      if (resultado.rows.length === 0) {
+        await bcrypt.compare(contrasena, HASH_RELLENO);
+        registrarFallo();
+        return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
+      }
+
+      const usuario = resultado.rows[0];
+
+      if (!usuario.verificado) {
+        registrarFallo();
+        return res.status(401).json({ error: 'La cuenta no ha sido verificada' });
+      }
+
+      if (!usuario.password_hash) {
+        registrarFallo();
+        return res.status(401).json({ error: 'Esta cuenta no tiene contraseña configurada' });
+      }
+
+      const coincide = await bcrypt.compare(contrasena, usuario.password_hash);
+      if (!coincide) {
+        registrarFallo();
+        return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
+      }
+
+      limitadores.loginFallosCuentaIp.exito(llaveCuentaIp);
+
+      const token = jwt.sign(
+        { id: usuario.id, rol: usuario.rol, nombre: usuario.nombre },
+        process.env.JWT_SECRET,
+        { expiresIn: '8h', algorithm: 'HS256' }
+      );
+
+      ponerCookie(res, NOMBRE_COOKIE, token, { ...OPCIONES_COOKIE, maxAgeSeg: DURACION_SEG });
+      res.json({ usuario: datosUsuario(usuario) });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error al iniciar sesión' });
+    }
   }
+);
+
+// Cerrar sesión: borra la cookie
+router.post('/logout', (req, res) => {
+  ponerCookie(res, NOMBRE_COOKIE, '', { ...OPCIONES_COOKIE, maxAgeSeg: 0 });
+  res.json({ ok: true });
 });
 
 // Usuario de la sesión actual
@@ -101,12 +151,16 @@ router.get('/me', verificarToken, async (req, res) => {
 });
 
 // Cambiar contraseña del usuario autenticado
-router.put('/cambiar-contrasena', verificarToken, async (req, res) => {
+router.put('/cambiar-contrasena', verificarToken, limitadores.cambiarContrasena, async (req, res) => {
   const { contrasenaActual, nuevaContrasena } = req.body;
   const usuarioId = req.usuario.id;
 
   if (!contrasenaActual || !nuevaContrasena) {
     return res.status(400).json({ error: 'La contraseña actual y la nueva son obligatorias' });
+  }
+
+  if (typeof contrasenaActual !== 'string' || typeof nuevaContrasena !== 'string' || nuevaContrasena.length > 200) {
+    return res.status(400).json({ error: 'Los datos enviados no son válidos' });
   }
 
   if (String(nuevaContrasena).length < 8) {
@@ -140,10 +194,13 @@ router.put('/cambiar-contrasena', verificarToken, async (req, res) => {
 // A partir de aquí: crean cuentas el Administrador y el Creador de Cuentas.
 
 // Generar y enviar código de verificación por correo
-router.post('/enviar-codigo', verificarToken, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
+router.post('/enviar-codigo', verificarToken, limitadores.enviarCodigoUsuario, limitadores.enviarCodigoDestino, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
   const correo = normalizarCorreo(req.body.correo);
   if (!correo) {
     return res.status(400).json({ error: 'El correo es obligatorio' });
+  }
+  if (correo.length > 150) {
+    return res.status(400).json({ error: 'El correo es demasiado largo' });
   }
 
   try {
@@ -175,7 +232,7 @@ router.post('/enviar-codigo', verificarToken, requerirRol(...PERMISOS.crearCuent
 });
 
 // Confirmar código de verificación
-router.post('/confirmar-codigo', verificarToken, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
+router.post('/confirmar-codigo', verificarToken, limitadores.confirmarCodigo, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
   const correo = normalizarCorreo(req.body.correo);
   const { codigo } = req.body;
 
@@ -213,7 +270,7 @@ router.post('/confirmar-codigo', verificarToken, requerirRol(...PERMISOS.crearCu
 });
 
 // Crear la cuenta si el correo fue verificado
-router.post('/registro', verificarToken, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
+router.post('/registro', verificarToken, limitadores.registro, requerirRol(...PERMISOS.crearCuentas), async (req, res) => {
   const { contrasena, nombre, apellidos, rol, materia } = req.body;
   const correo = normalizarCorreo(req.body.usuario || req.body.correo);
 
@@ -221,6 +278,18 @@ router.post('/registro', verificarToken, requerirRol(...PERMISOS.crearCuentas), 
     return res.status(400).json({
       error: 'Correo/Usuario, contraseña, nombre, apellidos y rol son obligatorios',
     });
+  }
+
+  const textos = [contrasena, nombre, apellidos, rol];
+  if (
+    textos.some((v) => typeof v !== 'string') ||
+    (materia !== undefined && materia !== null && typeof materia !== 'string') ||
+    correo.length > 150 ||
+    nombre.length > 75 ||
+    apellidos.length > 75 ||
+    contrasena.length > 200
+  ) {
+    return res.status(400).json({ error: 'Los datos enviados no son válidos' });
   }
 
   if (String(contrasena).length < 8) {
@@ -303,11 +372,15 @@ router.post('/registro', verificarToken, requerirRol(...PERMISOS.crearCuentas), 
 });
 
 // Permite que un Administrador cambie la contraseña de cualquier usuario sin pedir la contraseña actual
-router.put('/admin/cambiar-contrasena', verificarToken, requerirRol(ADMIN), async (req, res) => {
+router.put('/admin/cambiar-contrasena', verificarToken, limitadores.adminCambiarContrasena, requerirRol(ADMIN), async (req, res) => {
   const { id, nuevaContrasena } = req.body;
 
   if (!id || !nuevaContrasena) {
     return res.status(400).json({ error: 'El id y la nueva contraseña son obligatorios' });
+  }
+
+  if (typeof nuevaContrasena !== 'string' || nuevaContrasena.length > 200 || !Number.isSafeInteger(Number(id)) || Number(id) < 1) {
+    return res.status(400).json({ error: 'Los datos enviados no son válidos' });
   }
 
   if (String(nuevaContrasena).length < 8) {

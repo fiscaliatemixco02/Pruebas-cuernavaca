@@ -1,0 +1,22 @@
+# Secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Archivos subidos y respaldos (contienen información sensible)
+backend/uploads/
+respaldo-*.zip
+
+# Dependencias y builds
+node_modules/
+dist/
+dist-ssr/
+
+# Sistema / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log

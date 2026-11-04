@@ -5,7 +5,20 @@ const multer = require('multer');
 const bcrypt = require('bcrypt'); // usa 'bcryptjs' si es el que tienes instalado
 const PDFDocument = require('pdfkit');
 const pool = require('../db');
+const crypto = require('crypto');
 const { verificarToken, requerirRol } = require('../middleware/auth');
+const { limitadores } = require('../middleware/limitadores');
+const { todosSonPdf } = require('../utils/pdf');
+const {
+  entero,
+  texto,
+  booleano,
+  fechaISO,
+  parametro,
+  escaparLike,
+  tomar,
+  conValidacion,
+} = require('../utils/validar');
 
 const router = express.Router();
 router.use(verificarToken);
@@ -54,8 +67,11 @@ const upload = multer({
   storage: multer.diskStorage({
     destination: DIR_ENTREGAS,
     // sufijo aleatorio: varios archivos pueden llegar en el mismo milisegundo
-    filename: (req, file, cb) =>
-      cb(null, `${req.params.id}-${Date.now()}-${Math.round(Math.random() * 1e6)}.pdf`),
+    filename: (req, file, cb) => {
+      // Solo dígitos del id: req.params.id viene de la URL y podría traer "../"
+      const idSeguro = String(req.params.id).replace(/\D/g, '').slice(0, 15) || '0';
+      cb(null, `${idSeguro}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.pdf`);
+    },
   }),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB por archivo
   fileFilter: (req, file, cb) => {
@@ -69,7 +85,12 @@ const upload = multer({
 // El campo del FormData debe llamarse "archivos" (uno por cada PDF)
 function subirArchivos(req, res, next) {
   upload.array('archivos', MAX_ARCHIVOS)(req, res, (err) => {
-    if (!err) return next();
+    if (!err) {
+      const subidos = req.files || [];
+      if (todosSonPdf(subidos)) return next();
+      subidos.forEach((f) => fs.unlink(f.path, () => {}));
+      return res.status(400).json({ error: 'Todos los archivos deben ser PDF' });
+    }
     let msg = err.message;
     if (err.code === 'LIMIT_FILE_SIZE') msg = 'Un PDF supera los 20 MB';
     if (err.code === 'LIMIT_UNEXPECTED_FILE') msg = `Máximo ${MAX_ARCHIVOS} archivos por envío`;
@@ -214,7 +235,7 @@ router.get('/pendientes', requerirRol(...PERMISOS.verPendientes), async (req, re
 });
 
 // ---------- REPORTE MENSUAL EN PDF (debe ir ANTES de /:id) ----------
-router.get('/reporte-mensual', requerirRol(...PERMISOS.reporteMensual), async (req, res) => {
+router.get('/reporte-mensual', requerirRol(...PERMISOS.reporteMensual), limitadores.reportes, async (req, res) => {
   const mes = parseInt(req.query.mes, 10);
   const anio = parseInt(req.query.anio, 10);
   if (!(mes >= 1 && mes <= 12) || !(anio >= 2000 && anio <= 2100)) {
@@ -326,7 +347,7 @@ router.get('/reporte-mensual', requerirRol(...PERMISOS.reporteMensual), async (r
 // ---------- REPORTE ESTADÍSTICO ANUAL EN PDF (debe ir ANTES de /:id) ----------
 // Solicitados: peticiones recibidas en el mes.
 // Realizados: entregas (PDF del perito) cargadas en el mes.
-router.get('/reporte-estadistico', requerirRol(...PERMISOS.reporteEstadistico), async (req, res) => {
+router.get('/reporte-estadistico', requerirRol(...PERMISOS.reporteEstadistico), limitadores.reportes, async (req, res) => {
   const anio = req.query.anio ? parseInt(req.query.anio, 10) : new Date().getFullYear();
   if (!(anio >= 2000 && anio <= 2100)) {
     return res.status(400).json({ error: 'Año inválido' });
@@ -505,8 +526,11 @@ router.get('/reporte-estadistico', requerirRol(...PERMISOS.reporteEstadistico), 
 });
 
 // ---------- LISTA (el perito solo ve las suyas) ----------
-router.get('/', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
-  const { numero_llamado, perito, fecha, numero_carpeta } = req.query;
+router.get('/', requerirRol(...PERMISOS.verPeticiones), conValidacion(async (req, res) => {
+  const numero_llamado = parametro(req.query.numero_llamado).slice(0, 100);
+  const perito = parametro(req.query.perito).slice(0, 150);
+  const numero_carpeta = parametro(req.query.numero_carpeta).slice(0, 50);
+  const fecha = fechaISO(req.query.fecha);
   const condiciones = [];
   const params = [];
 
@@ -514,20 +538,20 @@ router.get('/', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
     params.push(req.usuario.id);
     condiciones.push(`perito_id = $${params.length}`);
   }
-  if (numero_llamado && numero_llamado.trim()) {
-    params.push(`%${numero_llamado.trim()}%`);
+  if (numero_llamado) {
+    params.push(`%${escaparLike(numero_llamado)}%`);
     condiciones.push(`numero_llamado ILIKE $${params.length}`);
   }
-  if (perito && perito.trim()) {
-    params.push(`%${perito.trim()}%`);
+  if (perito) {
+    params.push(`%${escaparLike(perito)}%`);
     condiciones.push(`nombre_perito ILIKE $${params.length}`);
   }
-  if (numero_carpeta && numero_carpeta.trim()) {
-    params.push(numero_carpeta.trim());
+  if (numero_carpeta) {
+    params.push(numero_carpeta);
     condiciones.push(`LOWER(numero_carpeta) = LOWER($${params.length})`);
   }
-  if (fecha && fecha.trim()) {
-    params.push(fecha.trim());
+  if (fecha) {
+    params.push(fecha);
     condiciones.push(`fecha_recibido = $${params.length}`);
   }
 
@@ -544,7 +568,7 @@ router.get('/', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Error al consultar peticiones' });
   }
-});
+}));
 
 // =====================================================================
 // RUTAS CON "/:id"
@@ -572,17 +596,34 @@ router.get('/:id', requerirRol(...PERMISOS.verPeticiones), async (req, res) => {
 
 // ---------- CREAR (Administrador y Receptor) ----------
 // El perito ya se asigna aquí, en el primer formulario.
-router.post('/', requerirRol(...PERMISOS.registrar), async (req, res) => {
-  let {
-    llamado_id,
-    nombre_ministerio_publico,
-    con_detenido,
-    materia_id,
-    numero_carpeta,
-    descripcion_solicitud,
-    numero_llamado,
-    perito_id,
-  } = req.body;
+router.post('/', requerirRol(...PERMISOS.registrar), conValidacion(async (req, res) => {
+  // Solo se leen estos campos (receptor_id, firmado_en, etc. del body se ignoran) y cada uno con su tipo
+  const b = tomar(req.body, [
+    'llamado_id',
+    'nombre_ministerio_publico',
+    'con_detenido',
+    'materia_id',
+    'numero_carpeta',
+    'descripcion_solicitud',
+    'numero_llamado',
+    'perito_id',
+  ]);
+  let llamado_id = entero(b.llamado_id, { campo: 'El llamado' });
+  const nombre_ministerio_publico = texto(b.nombre_ministerio_publico, {
+    campo: 'El nombre del Ministerio Público',
+    max: 150,
+    requerido: true,
+  });
+  let con_detenido = booleano(b.con_detenido, { campo: 'Con o sin detenido' }) ?? false;
+  let materia_id = entero(b.materia_id, { campo: 'La materia' });
+  const numero_carpeta = texto(b.numero_carpeta, { campo: 'El número de carpeta', max: 50, requerido: true });
+  const descripcion_solicitud = texto(b.descripcion_solicitud, {
+    campo: 'La descripción de la solicitud',
+    max: 5000,
+    requerido: true,
+  });
+  let numero_llamado = texto(b.numero_llamado, { campo: 'El número de llamado', max: 30 });
+  const perito_id = entero(b.perito_id, { campo: 'La persona asignada' });
 
   const receptor_id = req.usuario.id; // sale del token, no del body
 
@@ -622,7 +663,7 @@ router.post('/', requerirRol(...PERMISOS.registrar), async (req, res) => {
     }
 
     // Si viene asignado: Receptor -> perito de la materia, AIC -> policía, Administrador -> cualquiera
-    const peritoFinal = perito_id === '' || perito_id === undefined || perito_id === null ? null : perito_id;
+    const peritoFinal = perito_id;
     if (peritoFinal !== null) {
       const errorAsignado = await validarAsignado(peritoFinal, materia_id, req.usuario.rol);
       if (errorAsignado) return res.status(400).json({ error: errorAsignado });
@@ -685,16 +726,41 @@ router.post('/', requerirRol(...PERMISOS.registrar), async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Error al crear la petición' });
   }
-});
+}));
 
 // ---------- EDITAR ----------
 // Administrador: todo (menos quien recibe/firma, que solo se llena con /firmar).
 // Receptor: solo asignar perito en una petición suya que todavía no tiene perito.
-router.put('/:id', requerirRol(...PERMISOS.registrar), async (req, res) => {
+router.put('/:id', requerirRol(...PERMISOS.registrar), conValidacion(async (req, res) => {
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Id de petición inválido' });
 
-  const b = req.body;
+  // Solo estos campos se pueden modificar; cualquier otro que mande el cliente se descarta
+  const crudo = tomar(req.body, [
+    'receptor_id',
+    'nombre_ministerio_publico',
+    'con_detenido',
+    'materia_id',
+    'numero_carpeta',
+    'descripcion_solicitud',
+    'perito_id',
+    'entrega_dictamen',
+    'entrega_informe',
+    'entrega_requerimiento',
+  ]);
+  const b = {
+    receptor_id: entero(crudo.receptor_id, { campo: 'El receptor' }),
+    nombre_ministerio_publico: texto(crudo.nombre_ministerio_publico, { campo: 'El nombre del Ministerio Público', max: 150 }),
+    con_detenido: booleano(crudo.con_detenido, { campo: 'Con o sin detenido' }),
+    materia_id: entero(crudo.materia_id, { campo: 'La materia' }),
+    numero_carpeta: texto(crudo.numero_carpeta, { campo: 'El número de carpeta', max: 50 }),
+    descripcion_solicitud: texto(crudo.descripcion_solicitud, { campo: 'La descripción de la solicitud', max: 5000 }),
+    entrega_dictamen: booleano(crudo.entrega_dictamen, { campo: 'Entrega de dictamen' }),
+    entrega_informe: booleano(crudo.entrega_informe, { campo: 'Entrega de informe' }),
+    entrega_requerimiento: booleano(crudo.entrega_requerimiento, { campo: 'Entrega de requerimiento' }),
+  };
+  // "perito_id" solo cuenta si viene en el body (así se puede quitar la asignación mandando null)
+  if ('perito_id' in crudo) b.perito_id = entero(crudo.perito_id, { campo: 'La persona asignada' });
   const n = (v) => (v === '' || v === undefined ? null : v);
 
   try {
@@ -800,12 +866,13 @@ router.put('/:id', requerirRol(...PERMISOS.registrar), async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Error al actualizar la petición' });
   }
-});
+}));
 
 // ---------- SUBIR PDF(s) (Administrador o Perito asignado) ----------
 router.post(
   '/:id/entrega',
   requerirRol(...PERMISOS.subirEntrega),
+  limitadores.subidas,
   subirArchivos,
   async (req, res) => {
     const { id } = req.params;
@@ -815,7 +882,7 @@ router.post(
 
     if (!/^\d+$/.test(id)) { borrar(); return res.status(400).json({ error: 'Id inválido' }); }
     if (archivos.length === 0) return res.status(400).json({ error: 'Adjunta al menos un archivo PDF' });
-    if (!COLUMNA_ENTREGA[tipo]) { borrar(); return res.status(400).json({ error: 'Tipo de entrega inválido' }); }
+    if (typeof tipo !== 'string' || !Object.hasOwn(COLUMNA_ENTREGA, tipo)) { borrar(); return res.status(400).json({ error: 'Tipo de entrega inválido' }); }
 
     const client = await pool.connect();
     try {
@@ -885,7 +952,7 @@ router.post(
       await client.query('ROLLBACK').catch(() => {});
       borrar();
       console.error('ERROR ENTREGA:', error);
-      res.status(500).json({ error: 'Error al guardar la entrega: ' + error.message });
+      res.status(500).json({ error: 'Error al guardar la entrega' });
     } finally {
       client.release();
     }
@@ -1100,14 +1167,29 @@ router.post('/:id/firmar', requerirRol(...PERMISOS.firmar), async (req, res) => 
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Id de petición inválido' });
   if (!contrasena) return res.status(400).json({ error: 'Escribe tu contraseña para firmar' });
 
+  if (typeof contrasena !== 'string' || contrasena.length > 200) {
+    return res.status(400).json({ error: 'Escribe tu contraseña para firmar' });
+  }
+
+  // Contraseñas equivocadas: máximo 8 cada 15 minutos por usuario
+  const llaveFirma = `u:${req.usuario.id}`;
+  const espera = limitadores.firmarFallos.bloqueado(llaveFirma);
+  if (espera > 0) {
+    res.setHeader('Retry-After', String(espera));
+    return res.status(429).json({ error: 'Demasiados intentos con contraseña incorrecta. Espera unos minutos' });
+  }
+
   try {
     // 1) Verifica la contraseña del usuario de la sesión (el id sale del token)
     const u = await pool.query('SELECT password_hash FROM usuarios WHERE id = $1', [req.usuario.id]);
     const coincide = u.rows[0] && (await bcrypt.compare(contrasena, u.rows[0].password_hash));
     if (!coincide) {
+      limitadores.firmarFallos.fallo(llaveFirma);
       // 403 y no 401, para que el frontend no lo tome como sesión vencida
       return res.status(403).json({ error: 'Contraseña incorrecta' });
     }
+
+    limitadores.firmarFallos.exito(llaveFirma);
 
     // 2) La petición debe existir, tener PDF cargado y no estar firmada
     const p = await pool.query(
@@ -1155,7 +1237,7 @@ router.post('/:id/firmar', requerirRol(...PERMISOS.firmar), async (req, res) => 
     res.json(r.rows[0]);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Error al firmar: ' + error.message });
+    res.status(500).json({ error: 'Error al firmar' });
   }
 });
 

@@ -1,29 +1,32 @@
 // src/api/auth.js
 import { api } from "./client";
 
-export const TOKEN_KEY = "token";
+// Versiones anteriores guardaban el JWT en localStorage (un XSS podía robarlo). Ya no se usa:
+// la sesión vive en una cookie HttpOnly. Aquí se borra el token viejo que pudiera quedar en el navegador.
+const TOKEN_ANTIGUO = "token";
+try {
+  localStorage.removeItem(TOKEN_ANTIGUO);
+} catch {
+  /* sin acceso a localStorage: no hay nada que borrar */
+}
 
 // Backend:
-//   POST /api/auth/login   { usuario, contrasena } -> { token, usuario: { id, nombre, apellidos, correo, rol, materia } }
-//   GET  /api/auth/me      (Bearer token)          -> { id, nombre, apellidos, correo, rol, materia } | 401
-//   POST /api/auth/registro, /enviar-codigo, /confirmar-codigo  (solo Administrador)
+//   POST /api/auth/login   { usuario, contrasena, [turnstileToken], [sitio_web] } -> { usuario: { id, nombre, apellidos, correo, rol, materia } }
+//                          (además pone la cookie de sesión HttpOnly)
+//   POST /api/auth/logout                          -> borra la cookie de sesión
+//   GET  /api/auth/me      (cookie de sesión)      -> { id, nombre, apellidos, correo, rol, materia } | 401
+//   POST /api/auth/registro, /enviar-codigo, /confirmar-codigo  (Administrador / Creador de Cuentas)
 
 export const authApi = {
-  login: async (usuario, contrasena) => {
-    const data = await api.post("/auth/login", { usuario, contrasena });
-    localStorage.setItem(TOKEN_KEY, data.token);
+  login: async (usuario, contrasena, extra = {}) => {
+    const data = await api.post("/auth/login", { usuario, contrasena, ...extra });
     return data.usuario;
   },
 
-  // El JWT no se invalida en el servidor: basta con borrarlo aquí.
-  logout: async () => {
-    localStorage.removeItem(TOKEN_KEY);
-  },
+  // El servidor borra la cookie de sesión
+  logout: () => api.post("/auth/logout", {}),
 
-  me: () => {
-    if (!localStorage.getItem(TOKEN_KEY)) return Promise.reject(new Error("Sin sesión"));
-    return api.get("/auth/me");
-  },
+  me: () => api.get("/auth/me"),
 
   registrar: (payload) => api.post("/auth/registro", payload),
   enviarCodigoVerificacion: (correo) => api.post("/auth/enviar-codigo", { correo }),

@@ -4,6 +4,9 @@ const path = require('path');
 const multer = require('multer');
 const pool = require('../db');
 const { requerirRol } = require('../middleware/auth');
+const { limitadores } = require('../middleware/limitadores');
+const { todosSonPdf } = require('../utils/pdf');
+const { entero, texto, tomar, conValidacion, ErrorValidacion } = require('../utils/validar');
 
 const router = express.Router();
 
@@ -59,7 +62,7 @@ async function ordenAccesible(req, res) {
 }
 
 // MP crea una orden de investigación (y su carpeta) con uno o varios PDF
-router.post('/', requerirRol(MP), (req, res) => {
+router.post('/', requerirRol(MP), limitadores.subidas, (req, res) => {
   upload.array('pdfs', MAX_ARCHIVOS)(req, res, async (err) => {
     const archivos = req.files || [];
     const descartar = () => archivos.forEach((f) => fs.unlink(f.path, () => {}));
@@ -74,11 +77,25 @@ router.post('/', requerirRol(MP), (req, res) => {
     if (archivos.length === 0) {
       return res.status(400).json({ error: 'Debes adjuntar al menos un PDF.' });
     }
+    // El Content-Type lo manda el navegador y se puede falsificar: se revisa el contenido real
+    if (!todosSonPdf(archivos)) {
+      descartar();
+      return res.status(400).json({ error: 'Solo se permiten archivos PDF' });
+    }
 
-    const { numero_carpeta, area, breve_resena } = req.body;
-    if (!numero_carpeta || !area || !breve_resena) {
+    if (!req.body.numero_carpeta || !req.body.area || !req.body.breve_resena) {
       descartar();
       return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+    }
+    let numero_carpeta, area, breve_resena;
+    try {
+      numero_carpeta = texto(req.body.numero_carpeta, { campo: 'La carpeta', max: 50, requerido: true });
+      area = texto(req.body.area, { campo: 'El área', max: 20, requerido: true });
+      breve_resena = texto(req.body.breve_resena, { campo: 'La breve reseña', max: 5000, requerido: true });
+    } catch (e) {
+      descartar();
+      if (e instanceof ErrorValidacion) return res.status(400).json({ error: e.message });
+      throw e;
     }
     const carpeta = String(numero_carpeta).trim().toUpperCase();
     if (!FORMATO_CARPETA.test(carpeta)) {
@@ -206,11 +223,16 @@ router.get('/:id/pdf/:archivoId', requerirRol(MP, AIC), async (req, res) => {
 });
 
 // El AIC atiende la orden: crea la petición, la asigna a un policía y liga ambas
-router.put('/:id/atender', requerirRol(AIC), async (req, res) => {
+router.put('/:id/atender', requerirRol(AIC), conValidacion(async (req, res) => {
   if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Id inválido' });
 
-  const { perito_id, jefe_grupo, descripcion_solicitud, nombre_ministerio_publico } = req.body;
-  if (!perito_id) return res.status(400).json({ error: 'Debes asignar un policía.' });
+  // Solo estos campos se leen del body
+  const b = tomar(req.body, ['perito_id', 'jefe_grupo', 'descripcion_solicitud', 'nombre_ministerio_publico']);
+  if (!b.perito_id) return res.status(400).json({ error: 'Debes asignar un policía.' });
+  const perito_id = entero(b.perito_id, { campo: 'El policía', requerido: true });
+  const jefe_grupo = texto(b.jefe_grupo, { campo: 'El jefe de grupo', max: 150 });
+  const descripcion_solicitud = texto(b.descripcion_solicitud, { campo: 'La descripción', max: 5000 });
+  const nombre_ministerio_publico = texto(b.nombre_ministerio_publico, { campo: 'El nombre del Ministerio Público', max: 150 });
 
   const client = await pool.connect();
   try {
@@ -313,6 +335,6 @@ router.put('/:id/atender', requerirRol(AIC), async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
 module.exports = router;

@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "test": "node scripts/pruebas-seguridad.js",
+    "audit:deps": "npm audit --omit=dev --audit-level=high",
+    "outdated": "npm outdated"
   },
   "keywords": [],
   "author": "",
@@ -24,5 +27,8 @@
   },
   "allowScripts": {
     "bcrypt@6.0.0": true
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

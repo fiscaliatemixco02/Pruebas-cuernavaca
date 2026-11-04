@@ -4,6 +4,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const pool = require('../db');
 const { verificarToken, requerirRol } = require('../middleware/auth');
+const { limitadores } = require('../middleware/limitadores');
 
 // archiver 7 o anterior exporta una función; las versiones nuevas exportan la clase ZipArchive
 const crearZip = (opciones) =>
@@ -22,7 +23,7 @@ const DIR_ORDENES = path.join(__dirname, '..', 'uploads', 'ordenes-investigacion
 const DIR_DOCUMENTOS = path.join(__dirname, '..', 'uploads', 'documentos-policiales');
 
 // ---------- RESPALDO COMPLETO (.zip): datos de todas las tablas + PDF ----------
-router.get('/', requerirRol('Administrador'), async (req, res) => {
+router.get('/', requerirRol('Administrador'), limitadores.respaldo, async (req, res) => {
   try {
     // Todas las tablas del esquema public (las vistas no se respaldan: se arman con las tablas)
     // Incluye entrega_archivos y solicitud_mp_archivos automáticamente.

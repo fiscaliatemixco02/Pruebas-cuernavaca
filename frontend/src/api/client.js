@@ -2,24 +2,27 @@
 // Cliente API central. Todas las funciones de src/api/*.js llaman a tu backend
 // Express, que es el que ejecuta las queries contra Postgres.
 //
-// URL de la API en `.env`:  VITE_API_URL=http://localhost:3000/api
+// URL de la API en `.env`:  VITE_API_URL=https://tu-servidor/api
+//
+// La sesión ya NO se guarda en localStorage: el servidor la entrega en una cookie HttpOnly que el
+// navegador manda solo (por eso todas las peticiones llevan credentials: "include").
 // ---------------------------------------------------------------------------
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
-const TOKEN_KEY = "token"; // debe coincidir con src/api/auth.js
+export const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
-// Token JWT guardado al iniciar sesión, enviado como Bearer en cada petición.
+// En producción la API debe ir por HTTPS (la cookie de sesión es Secure y no viaja por http)
+if (import.meta.env.PROD && BASE_URL.startsWith("http://") && !/localhost|127\.0\.0\.1/.test(BASE_URL)) {
+  console.warn("VITE_API_URL usa http:// en producción. Cámbiala a https://");
+}
+
+// Cabecera que exige el servidor en las peticiones que modifican datos (defensa contra CSRF).
+// Una página ajena no puede añadirla sin que el CORS del servidor se lo permita.
 function authHeaders() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return { "X-Requested-With": "XMLHttpRequest" };
 }
 
 // El backend responde { error: "..." }; se acepta también { message: "..." }.
 function mensajeDeError(res, data, path) {
-  // Token vencido o inválido: se borra (el login mismo también responde 401 y no cuenta)
-  if (res.status === 401 && !path.startsWith("/auth/login")) {
-    localStorage.removeItem(TOKEN_KEY);
-  }
   return data?.error || data?.message || `Error ${res.status} al llamar ${path}`;
 }
 

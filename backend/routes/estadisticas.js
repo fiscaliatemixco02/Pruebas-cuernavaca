@@ -1,13 +1,20 @@
 // backend/routes/estadisticas.js
 const express = require('express');
 const pool = require('../db');
+const { entero, ErrorValidacion } = require('../utils/validar');
 
 const router = express.Router();
 
 // GET /api/estadisticas/conteos?materia_id=
 // -> { dia, semana, mes }
 router.get('/conteos', async (req, res) => {
-  const { materia_id } = req.query;
+  let materia_id;
+  try {
+    materia_id = entero(typeof req.query.materia_id === 'string' ? req.query.materia_id : null, { campo: 'La materia' });
+  } catch (e) {
+    if (e instanceof ErrorValidacion) return res.status(400).json({ error: 'Materia inválida' });
+    throw e;
+  }
 
   try {
     const filtroMateria = materia_id ? 'AND materia_id = $1' : '';
