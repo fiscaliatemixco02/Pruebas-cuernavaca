@@ -1,0 +1,54 @@
+﻿SISTEMA EN DOCKER (Windows)
+===========================
+
+QUE HACE
+  El sistema corre en tres contenedores (base de datos, servidor y pagina web).
+  Todo se configura en el archivo ".env". Una vez instalado, arranca solo al prender la computadora.
+
+REQUISITOS (en la computadora donde va a funcionar)
+  - Docker Desktop instalado (https://www.docker.com/products/docker-desktop/)
+  - Internet la primera vez (descarga imagenes) y para enviar los correos de verificacion
+  - NO hace falta instalar Node ni PostgreSQL
+
+INSTALACION (una sola vez)
+  1. Instala Docker Desktop. En Settings > General activa "Start Docker Desktop when you sign in to Windows".
+  2. Copia la carpeta del proyecto a esta computadora (por ejemplo C:\Sistema).
+  3. Copia ".env.example" como ".env" y llenalo:
+       - DB_PASSWORD y JWT_SECRET: textos largos y distintos
+       - EMAIL_USER y EMAIL_PASS: el correo (Gmail con "contrasena de aplicacion")
+       - ADMIN_CORREO y ADMIN_PASSWORD: con ellos entraras la primera vez
+  4. Pon 01-estructura.sql y 02-catalogos.sql dentro de la carpeta database\init
+  5. Haz clic derecho en "abrir-puerto.bat" > "Ejecutar como administrador" (permite entrar desde otras computadoras).
+  6. Doble clic en "iniciar.bat". La primera vez tarda varios minutos.
+  7. Entra con el correo y la contrasena de ADMIN_CORREO / ADMIN_PASSWORD.
+     Despues, borra ADMIN_PASSWORD del archivo .env.
+
+USO DIARIO
+  - No hay que hacer nada: el sistema arranca solo al prender la computadora (con Docker Desktop abierto).
+  - En esta computadora:  http://localhost   (o el acceso directo "Sistema.url")
+  - En las otras computadoras:  http://IP-de-esta-computadora   (ejecuta "ver-direccion.bat" para verla)
+
+ARCHIVOS DE DOBLE CLIC
+  iniciar.bat        prende el sistema y abre el navegador
+  detener.bat        lo apaga (los datos se conservan)
+  actualizar.bat     aplica cambios nuevos del codigo
+  respaldo.bat       guarda la base y los PDF en la carpeta "respaldos" (conviene programarlo cada dia
+                     con el Programador de tareas de Windows)
+  abrir-puerto.bat   abre el firewall (como administrador)
+  ver-direccion.bat  muestra la direccion para las otras computadoras
+
+SI ALGO FALLA
+  Abre una terminal en esta carpeta y ejecuta:
+     docker compose ps                 (que contenedores estan arriba)
+     docker compose logs backend       (errores del servidor)
+     docker compose logs db            (errores de la base)
+
+EMPEZAR DE CERO OTRA VEZ  (BORRA TODOS LOS DATOS)
+     docker compose down -v
+     docker compose up -d
+
+IMPORTANTE
+  - El archivo ".env" NO debe subirse a GitHub. Agrega estas lineas al .gitignore de la raiz:
+        .env
+        respaldos/
+  - Dentro de la red local el sistema usa HTTP (sin cifrar). Si se necesita HTTPS, se agrega despues.
