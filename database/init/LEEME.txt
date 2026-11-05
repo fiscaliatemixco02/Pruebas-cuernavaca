@@ -1,0 +1,9 @@
+Aqui van los archivos .sql con que se crea la base de datos nueva.
+Se ejecutan UNA sola vez (la primera vez que se prende el sistema, con la base vacia), en orden alfabetico:
+
+  01-estructura.sql   las tablas, vistas y funciones   (pg_dump --schema-only)
+  02-catalogos.sql    roles, materias, llamados, etc.  (pg_dump --data-only de los catalogos)
+
+Si despues cambias estos archivos, hay que recrear la base (se borran sus datos):
+  docker compose down -v
+  docker compose up -d
